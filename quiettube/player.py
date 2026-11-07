@@ -181,7 +181,12 @@ class MpvPlayer:
             self.command(["request_log_messages", "warn"])
             for index, name in enumerate(("time-pos", "duration", "pause"), 1):
                 self.command(["observe_property", index, name])
-            self.command(["loadfile", url, "replace", -1, {"start": str(max(0, position))}])
+            # mpv 0.38 added a positional index before options. Named arguments
+            # preserve the start position on both Ubuntu's 0.37 and newer mpv.
+            if not self.command({"name": "loadfile", "url": url, "flags": "replace",
+                                 "options": {"start": str(max(0, position))}}, request_id=100):
+                self._emit(generation, "error", "The video player could not accept the playback request.")
+                return
             buffer = b""
             ended = False
             snapshot = {}
@@ -218,6 +223,10 @@ class MpvPlayer:
                         continue
                     name = event.get("event")
                     request = event.get("request_id")
+                    if request == 100 and event.get("error") != "success":
+                        ended = True
+                        self._emit(generation, "error", "The video player rejected the playback request. Check your mpv installation. Your queue is preserved.")
+                        return
                     if isinstance(request, int) and 1000 <= request < 1000 + len(self.SNAPSHOT_PROPERTIES):
                         index = request - 1000
                         prop = self.SNAPSHOT_PROPERTIES[index]
@@ -268,7 +277,7 @@ class MpvPlayer:
             if generation == self.generation:
                 self.connection = None
 
-    def command(self, command: list, request_id=None) -> bool:
+    def command(self, command: list | dict, request_id=None) -> bool:
         with self.send_lock:
             if not self.connection:
                 return False

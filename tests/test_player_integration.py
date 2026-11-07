@@ -92,6 +92,24 @@ def test_real_mpv_reopens_at_requested_position(clip):
         player.stop()
 
 
+def test_rejected_load_command_emits_safe_error_instead_of_waiting(clip):
+    class RejectingPlayer(MpvPlayer):
+        def command(self, command, request_id=None):
+            if isinstance(command, dict) and command.get("name") == "loadfile":
+                command = {"name": "quiettube-intentionally-invalid-command"}
+            return super().command(command, request_id)
+
+    events = []
+    player = RejectingPlayer(events.append)
+    try:
+        player.start(str(clip), extra_args=["--vo=null", "--ao=null", "--force-window=no"])
+        wait_for(lambda: any(event.kind == "error" for event in events))
+        assert not any(event.kind == "finished" for event in events)
+        assert str(clip) not in str([event.value for event in events if event.kind == "error"])
+    finally:
+        player.stop()
+
+
 def test_real_mpv_missing_file_emits_error_not_completion(tmp_path):
     events = []
     player = MpvPlayer(events.append)

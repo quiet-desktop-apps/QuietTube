@@ -9,10 +9,21 @@ No binary packages for other distributions were produced by these checks.
 Prepared for the independent `quiet-desktop-apps` repository: MIT licensing,
 architecture and Agentic Engineering docs, scoped memory evidence, synthetic-data
 screenshots, contributor/security guidance and PR-only CI configuration.
-Local verification: all 133 tests passed with 89% overall statement coverage.
+Local verification: all 134 tests passed with 89% overall statement coverage
+after the compatibility regression below. The initial source snapshot had 133 tests.
 The GTK/Python deprecation warnings remain recorded below. The screenshot was
 captured from a fresh offline preview with no personal account. CI on a clean
 GitHub runner is tracked on the publication PR, separately from these local results.
+
+Clean-runner mpv compatibility fix (0.1.1): Ubuntu 24.04's mpv 0.37 rejected the
+newer positional loadfile argument shape. Named `url`, `flags` and `options`
+arguments work across both versions and preserve the resume position. Request
+acknowledgements now report rejection explicitly instead of silently waiting.
+A real mpv regression verifies rejection emits a safe error without leaking paths
+or falsely completing a video. The existing real-player tests check resume,
+seeking, rendered frames, consecutive queue playback and failure recovery.
+The [mpv 0.37 IPC documentation](https://github.com/mpv-player/mpv/blob/v0.37.0/DOCS/man/ipc.rst)
+and command definition were checked before changing the call.
 
 Earlier dated records below describe development at that time; install paths and
 version references in them are historical, not current release instructions.
