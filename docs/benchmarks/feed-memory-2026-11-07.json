@@ -1,0 +1,90 @@
+{
+  "refreshes": 200,
+  "cards_per_page": 30,
+  "warm_rss_mib": 203.1,
+  "final_rss_mib": 203.2,
+  "growth_after_warmup_mib": 0.1,
+  "thumbnail_cache_entries": 30,
+  "samples": [
+    {
+      "refreshes": 1,
+      "rss_mib": 194.7
+    },
+    {
+      "refreshes": 11,
+      "rss_mib": 203.1
+    },
+    {
+      "refreshes": 21,
+      "rss_mib": 203.1
+    },
+    {
+      "refreshes": 31,
+      "rss_mib": 203.1
+    },
+    {
+      "refreshes": 41,
+      "rss_mib": 203.1
+    },
+    {
+      "refreshes": 51,
+      "rss_mib": 203.1
+    },
+    {
+      "refreshes": 61,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 71,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 81,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 91,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 101,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 111,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 121,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 131,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 141,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 151,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 161,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 171,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 181,
+      "rss_mib": 203.2
+    },
+    {
+      "refreshes": 191,
+      "rss_mib": 203.2
+    }
+  ]
+}

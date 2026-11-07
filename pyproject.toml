@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quiettube"
+version = "0.1.0"
+description = "A native, memory-conscious YouTube feed and playback queue for Linux"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [{name = "Paulo Aboim Pinto"}]
+dependencies = ["yt-dlp[default]==2026.10.26", "SecretStorage==3.5.0; sys_platform == 'linux'"]
+
+[project.urls]
+Homepage = "https://github.com/quiet-desktop-apps/QuietTube"
+Issues = "https://github.com/quiet-desktop-apps/QuietTube/issues"
+
+[project.scripts]
+quiettube = "quiettube.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["quiettube*"]
+
+[tool.setuptools.package-data]
+quiettube = ["style.css", "icons/*.svg"]

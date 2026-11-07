@@ -1,0 +1,33 @@
+.venv/
+__pycache__/
+*.pyc
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.runtime/
+test-output/
+cookies*.txt
+*.sqlite3*
+# The parent repository ignores scratch scripts named _*.py; retain package entry points.
+!quiettube/__init__.py
+!quiettube/__main__.py
+
+# Private state and generated verification output
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+.pytest_cache/
+__pycache__/
+*.pyc
+test-output/
+*.db
+*.db-*
+*.sqlite*
+cookies*.txt
+node_modules/
+.venv/

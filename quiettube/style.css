@@ -1,0 +1,40 @@
+window { background: #10151f; color: #e9edf5; }
+headerbar { background: #151c29; border-bottom: 1px solid #293244; }
+.brand { font-size: 20px; font-weight: 800; letter-spacing: -0.7px; }
+.eyebrow { color: #7ce2b5; font-size: 11px; font-weight: 800; letter-spacing: 1.8px; }
+.heading { font-size: 28px; font-weight: 800; letter-spacing: -0.7px; }
+.subheading { font-size: 17px; font-weight: 700; }
+.muted { color: #a2aec2; }
+.small { font-size: 12px; }
+.sidebar { background: #141b27; border-right: 1px solid #293244; padding: 20px 12px; }
+.sidebar button { border: 0; background: transparent; padding: 12px; border-radius: 10px; box-shadow: none; }
+.sidebar button:hover, .sidebar button.active { background: #263548; color: #8aefc3; }
+button { background: #263246; color: #e9edf5; border: 1px solid #364258; border-radius: 8px; padding: 7px 12px; box-shadow: none; }
+button:hover { background: #33445b; }
+button.suggested-action { background: #83e5b6; color: #102b20; border-color: #83e5b6; font-weight: 700; }
+button:disabled { opacity: 0.45; }
+entry, spinbutton, dropdown { background: #1d2738; color: #e9edf5; border-radius: 8px; border-color: #364258; }
+.card { background: #1a2332; border: 1px solid #2c384c; border-radius: 12px; padding: 8px; }
+.thumbnail { background: #253b4a; border-radius: 8px; }
+.preview { border-radius: 8px; }
+.preview-actions > button, .preview-actions > menubutton > button {
+  background: rgba(12, 18, 27, 0.66); color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 8px;
+  min-width: 32px; min-height: 32px; padding: 0; box-shadow: none;
+}
+.preview-actions > button:hover, .preview-actions > menubutton > button:hover,
+.preview-actions > button:focus-visible, .preview-actions > menubutton > button:focus-visible {
+  background: rgba(12, 18, 27, 0.92); border-color: #83e5b6; color: #a5f3cf;
+}
+.preview-actions > button.liked { color: #a5f3cf; background: rgba(19, 65, 48, 0.88); opacity: 1; }
+.queue-panel { background: #141c29; border-left: 1px solid #293244; padding: 20px 16px; }
+.queue-row { background: #1e293b; padding: 10px; border-radius: 8px; margin-bottom: 7px; }
+list, listbox, flowbox { background: transparent; }
+listbox row:selected { background: #344b52; border-radius: 8px; }
+.transport { background: #1b2936; border-top: 1px solid #34465a; padding: 12px 20px; }
+.status { padding: 8px 16px; background: #1d2c39; color: #c3d9e6; }
+.error { color: #ffbfac; }
+.pill { color: #8de4bc; background: #203b35; border-radius: 20px; padding: 5px 10px; font-size: 11px; }
+.empty { padding: 48px 24px; }
+scale trough { background: #344359; }
+scale highlight { background: #83e5b6; }
