@@ -218,9 +218,34 @@ QuietTube's queue or synchronize its resume position; the queue remains intact.
 
 There is no automatic browser-cookie fallback or retry loop. Waiting before a
 manual retry may help a temporary restriction, but QuietTube cannot guarantee it.
-Browser-session mode remains a separate explicit choice; reconnecting a website
-session is not a guaranteed solution either. Google sign-in for account feeds is
-also available near the top of the account dialog when OAuth is selected.
+You can explicitly add the separate playback connection below without changing
+your account feed mode. Google sign-in for account feeds is available near the top
+of the account dialog when OAuth is selected.
+
+### Connect playback while keeping personal OAuth
+
+1. Click **Connect playback** in the header, or **Connect / reconnect playback**
+   inside Playback help.
+2. Use **Open YouTube sign-in** if necessary, then select the browser/profile
+   where you are signed in. You may instead import a Netscape YouTube cookies file.
+3. Click **Save browser session for playback**. Only YouTube cookies are retained,
+   in `youtube-playback-session.txt` under the private application data directory
+   (normally `~/.local/share/quiettube/`). The file is `0600`, its directory `0700`.
+4. Close the browser and dialog, then press **Play**. The current video retries at
+   its saved position. The dashboard and Likes continue using OAuth.
+
+**Playback session · saved** confirms a local session was imported, not that
+YouTube will accept it. The actual playback attempt establishes that. The first
+live authenticated check on 9 November restored playback of the queued video;
+long-term reliability is not established. Reconnect here if the session expires.
+**Remove playback session** deletes only this separate session and stops its
+active player copy; it retains OAuth, the account-feed session, queue and history.
+
+This is opt-in. An older saved browser-account session is not silently reused.
+In browser-session account mode, playback still uses the original account session;
+the separate playback session is used only when personal OAuth is selected.
+Importing does not load feeds or claim a video is playable. Browser cookies are
+read on import, not continuously; no embedded browser or background browser is added.
 
 The upstream [yt-dlp account documentation](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#logging-in-with-oauth)
 states that OAuth login is not supported for YouTube extraction. A Data API login

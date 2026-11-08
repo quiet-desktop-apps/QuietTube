@@ -598,3 +598,54 @@ def test_oauth_sign_in_is_reachable_at_top_of_account_dialog(window, monkeypatch
     assert calls[-1]['action'] == 'oauth_connect'
     assert not signin.get_sensitive()
     window.account_window.close()
+
+
+def test_separate_playback_setup_preserves_oauth_feed_queue_and_ignores_stale_results(window, monkeypatch):
+    from quiettube.tasks import TaskResult
+    from quiettube.ui import DEMO_VIDEOS
+    from test_controller import FakePlayer
+    window.demo = False
+    window.store.set('account_mode', 'oauth')
+    window.store.set('oauth_authorized', True)
+    window.oauth_verified = True
+    window.player = window.controller.player = FakePlayer()
+    window.controller.play_now(DEMO_VIDEOS[0])
+    window.controller.queue.current.position = 75
+    before = window.controller.queue.to_dict()
+    feed = window.feed
+    calls = []
+    monkeypatch.setattr('quiettube.playback_connection.suggested_profile', lambda *_: '')
+    window.open_playback_connection()
+    dialog = window.playback_connection_window
+    window.open_playback_connection()
+    assert window.playback_connection_window is dialog
+    monkeypatch.setattr(dialog.tasks, 'submit', lambda request: calls.append(request))
+    dialog.connect_button.emit('clicked')
+    assert calls[-1]['action'] == 'playback_connect'
+    assert calls[-1]['session'] == str(window.store.playback_cookie_path)
+    assert 'account_mode' not in calls[-1]
+    assert not dialog.actions.get_sensitive()
+    dialog.on_result(TaskResult(dialog.tasks.generation + 1, {'playback_session_saved': True}))
+    assert not window.store.get('playback_session_enabled', False)
+    dialog.on_result(TaskResult(dialog.tasks.generation, error='Synthetic import failure'))
+    assert not window.store.get('playback_session_enabled', False)
+    assert dialog.actions.get_sensitive()
+    assert window.oauth_verified
+    window.store.playback_cookie_path.write_text('synthetic session')
+    dialog.on_result(TaskResult(dialog.tasks.generation, {'playback_session_saved': True}))
+    assert window.store.get('playback_session_enabled')
+    assert window.controller.queue.to_dict() == before
+    assert window.feed == feed and window.oauth_verified
+    assert window.store.get('account_mode') == 'oauth' and window.store.get('oauth_authorized')
+    assert window.playback_connection_button.get_label() == 'Playback session · saved'
+    window.controller.play()
+    assert window.player.starts[-1][3] == window.store.playback_cookie_path
+    dialog.remove_session()
+    assert not window.store.playback_cookie_path.exists()
+    assert not window.store.get('playback_session_enabled')
+    assert window.controller.queue.to_dict() == before
+    assert window.oauth_verified and window.store.get('oauth_authorized')
+    dialog.close()
+    assert window.playback_connection_window is None
+    dialog.on_result(TaskResult(dialog.tasks.generation, {'playback_session_saved': True}))
+    assert not window.store.get('playback_session_enabled')

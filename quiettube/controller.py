@@ -70,7 +70,9 @@ class PlaybackController:
         else:
             self.state = "loading"
             item = self.queue.current
-            session = None if self.store.get("account_mode", "browser") == "oauth" else self.store.cookie_path
+            session = self.store.cookie_path
+            if self.store.get("account_mode", "browser") == "oauth":
+                session = self.store.playback_cookie_path if self.store.get("playback_session_enabled", False) else None
             self.player.start(item.video.url, item.position, self.height, session)
         self.changed()
 

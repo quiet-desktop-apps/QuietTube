@@ -155,3 +155,35 @@ def test_playback_verification_preserves_oauth_and_queue_until_explicit_retry(tm
     assert player.starts[-1][1] == 75 and player.starts[-1][3] is None
     controller.close()
     store.close()
+
+
+def test_oauth_playback_session_is_explicit_separate_and_persistent(tmp_path):
+    store, player, controller = build(tmp_path)
+    store.set('account_mode', 'oauth')
+    store.set('oauth_authorized', True)
+    store.cookie_path.write_text('synthetic feed session')
+    store.playback_cookie_path.write_text('synthetic playback session')
+    controller.queue.current.position = 31
+    before = controller.queue.to_dict()
+    controller.reload()
+    assert player.starts[-1][3] is None  # a file alone is not consent
+    store.set('playback_session_enabled', True)
+    controller.reload()
+    assert player.starts[-1][1] == 31
+    assert player.starts[-1][3] == store.playback_cookie_path
+    assert controller.queue.to_dict() == before
+    controller.close()
+    store.close()
+    store = Store(tmp_path)
+    controller = PlaybackController(store, player)
+    controller.play()
+    assert player.starts[-1][3] == store.playback_cookie_path
+    store.set('playback_session_enabled', False)
+    controller.reload()
+    assert player.starts[-1][3] is None
+    store.set('account_mode', 'browser')
+    controller.reload()
+    assert player.starts[-1][3] == store.cookie_path
+    assert store.get('oauth_authorized')
+    controller.close()
+    store.close()

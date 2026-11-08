@@ -108,6 +108,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.account_window = None
         self.oauth_sign_in_shortcut = None
         self.playback_help_window = None
+        self.playback_connection_window = None
         self.oauth_verified = False
         self.page_tokens = {0: ""}
         self.busy = False
@@ -135,6 +136,8 @@ class MainWindow(Gtk.ApplicationWindow):
         header.pack_start(label("LESS BROWSER. MORE VIDEO.", "eyebrow"))
         self.account_button = button("Connect YouTube", self.open_account)
         header.pack_end(self.account_button)
+        self.playback_connection_button = button("Connect playback", self.open_playback_connection)
+        header.pack_end(self.playback_connection_button)
         self.set_titlebar(header)
 
         root = box(spacing=0)
@@ -895,6 +898,9 @@ class MainWindow(Gtk.ApplicationWindow):
                     self.queue_list.select_row(row)
             self.queue_signature = signature
             self.queue_title.set_text(f"Up next · {len(queue.upcoming)}")
+        self.playback_connection_button.set_label(
+            "Playback session · saved" if self.store.get("playback_session_enabled", False) and self.store.playback_cookie_path.exists()
+            else "Connect playback")
         if self.oauth_mode():
             state = "connected" if self.oauth_verified else ("saved" if self.account_available() else "sign in needed")
             self.account_button.set_label("Personal OAuth · " + state)
@@ -902,6 +908,26 @@ class MainWindow(Gtk.ApplicationWindow):
         else:
             self.account_button.set_label("YouTube connected" if self.store.cookie_path.exists() else "Connect YouTube")
             self.account_button.set_tooltip_text("Connect or manage the browser session")
+
+    def open_playback_connection(self):
+        if self.demo:
+            return
+        if self.playback_help_window:
+            self.playback_help_window.close()
+        if self.playback_connection_window:
+            self.playback_connection_window.present()
+            return
+        from .playback_connection import PlaybackConnectionWindow
+        def updated():
+            if self.oauth_mode():
+                self.controller.stop()
+            self.refresh_transport()
+            self.set_status("Playback connection updated. Press Play to retry at the saved position; account feeds are unchanged.")
+        def closed(*_):
+            self.playback_connection_window = None
+        self.playback_connection_window = PlaybackConnectionWindow(self, self.store, updated)
+        self.playback_connection_window.connect("close-request", closed)
+        self.playback_connection_window.present()
 
     def open_playback_help(self):
         item = self.controller.queue.current
@@ -911,7 +937,7 @@ class MainWindow(Gtk.ApplicationWindow):
             self.playback_help_window.present()
             return
         dialog = Gtk.Window(title="Playback help", transient_for=self, modal=True)
-        dialog.set_default_size(560, 560)
+        dialog.set_default_size(560, 640)
         self.playback_help_window = dialog
         def closed(*_):
             self.playback_help_window = None
@@ -929,11 +955,12 @@ class MainWindow(Gtk.ApplicationWindow):
         if self.oauth_mode():
             explanation = ("Personal OAuth connects your dashboard, subscriptions and Likes. It does not sign mpv into "
                            "YouTube's video service. The connected badge describes account data only. Signing in with "
-                           "Google again will not fix a playback verification challenge. QuietTube has not switched to browser cookies.")
+                           "Google again will not fix a playback verification challenge. Connect playback to explicitly save a separate browser session for mpv.")
         else:
             explanation = ("Playback uses your imported YouTube website session when one is saved. That session can expire, "
                            "and YouTube can still require browser verification. Reconnecting it is not a guaranteed fix.")
         content.append(label(explanation, "muted", True))
+        content.append(button("Connect / reconnect playback", self.open_playback_connection, "suggested-action"))
         content.append(label("Wait before retrying if YouTube asks for verification or limits requests. You can open this "
                              "video on YouTube at the saved position. Browser playback will not advance QuietTube's queue "
                              "or update its saved position.", "small", True))
@@ -1183,6 +1210,8 @@ class MainWindow(Gtk.ApplicationWindow):
                 self.account_window.close()
             if self.playback_help_window:
                 self.playback_help_window.close()
+            if self.playback_connection_window:
+                self.playback_connection_window.close()
             self.thumbnails.close()
             self.controller.close()
             self.store.close()
