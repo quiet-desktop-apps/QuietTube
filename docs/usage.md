@@ -194,9 +194,11 @@ to synchronise YouTube watch history.
 
 Likes are an explicit account action, separate from the local queue. A dedicated
 worker handles one Like at a time, so browsing or searching does not cancel it.
-The worker reads the video's rating, sends the authenticated Like command only if
-needed, then reads the rating again to verify it. An expired session prompts you
-to reconnect; an unconfirmed or timed-out request is not presented as success.
+In browser-session mode, the worker reads the rating, sends the Like command only
+if needed, then reads the rating again to verify it. In OAuth mode, success means
+the Data API accepted the rating request; there is no additional read-back call.
+Expired authorization prompts you to sign in again; an unconfirmed or timed-out
+request is not presented as success.
 Check Liked videos before retrying an ambiguous network failure. No account
 ratings are changed by the automated tests or by opening a feed.
 
