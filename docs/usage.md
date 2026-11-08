@@ -47,6 +47,11 @@ in `.venv`, with system-site-packages enabled for the distribution's GTK binding
 
 ## Connect your YouTube account
 
+These instructions describe the current browser-session implementation. For the
+reasons we are investigating personal OAuth credentials, project quotas, costs and
+remaining limitations, read [account direction](account-direction.md). That setup
+is planned and is not yet available through this dialog.
+
 1. Click **Connect YouTube**, then **Open YouTube sign-in**.
 2. Sign in on the real YouTube website in your normal browser. Choose the desired
    YouTube channel/account there if you have more than one.
