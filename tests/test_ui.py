@@ -404,3 +404,120 @@ def test_failed_like_remains_retryable_and_signed_out_like_opens_connection(wind
     assert window.account_window is not None
     assert window.like_pending is None
     window.account_window.close()
+
+
+def test_oauth_setup_has_precise_steps_and_clears_pasted_values(window, monkeypatch):
+    from quiettube.oauth_help import SETUP_STEPS, SCOPES_TEXT
+    from quiettube.tasks import TaskResult
+    window.demo = False
+    window.store.cookie_path.write_text('synthetic browser session')
+    window.open_account()
+    requests = []
+    monkeypatch.setattr(window.tasks, 'submit', lambda request: requests.append(request))
+    assert len(SETUP_STEPS) == 7
+    assert SCOPES_TEXT.endswith('/youtube.force-ssl')
+    assert not window.oauth_client_secret.get_visibility()
+    window.oauth_client_id.set_text('synthetic-test.apps.googleusercontent.com')
+    window.oauth_client_secret.set_text('synthetic-secret')
+    window.save_oauth_client()
+    assert requests[-1]['action'] == 'oauth_configure'
+    assert 'session' not in requests[-1]
+    assert requests[-1]['client_secret'] == 'synthetic-secret'
+    assert window.oauth_client_secret.get_text() == ''
+    assert window.oauth_client_id.get_text() == ''
+    assert not window.oauth_actions.get_sensitive()
+    window.on_result(TaskResult(window.tasks.generation, {'configured': True, 'client_changed': True}))
+    assert window.store.get('oauth_configured')
+    assert not window.oauth_mode()  # configuring isn't signing in or switching
+    assert window.store.cookie_path.exists()
+    assert window.oauth_actions.get_sensitive()
+    assert 'keyring' in window.oauth_progress.get_text()
+    values = str(window.store.db.execute('SELECT * FROM state').fetchall())
+    assert 'synthetic-secret' not in values and 'synthetic-test.apps' not in values
+    window.account_window.close()
+
+
+def test_oauth_connection_routes_feed_and_likes_without_browser_cookies(window, monkeypatch):
+    from quiettube.tasks import TaskResult
+    from quiettube.ui import DEMO_VIDEOS
+    window.demo = False
+    window.store.cookie_path.write_text('synthetic browser session')
+    window.open_account()
+    requests, likes = [], []
+    monkeypatch.setattr(window.tasks, 'submit', lambda request: requests.append(request))
+    monkeypatch.setattr(window.rating_tasks, 'submit', lambda request: likes.append(request))
+    window.oauth_request('oauth_connect')
+    assert window.pending == 'oauth_connect'
+    assert not window.oauth_mode()
+    window.on_result(TaskResult(window.tasks.generation, {'connected': True, 'account_connected': True}))
+    assert window.oauth_mode()
+    assert window.account_window is None
+    assert requests[-1]['kind'] == 'home'
+    assert requests[-1]['account_mode'] == 'oauth'
+    assert 'session' not in requests[-1]
+    assert window.store.cookie_path.exists()  # retained only for explicit switching
+    window.pending = ''
+    window.like_video(DEMO_VIDEOS[0])
+    assert likes[-1]['account_mode'] == 'oauth'
+    assert 'session' not in likes[-1]
+
+
+def test_oauth_error_never_falls_back_and_stale_completion_cannot_connect(window, monkeypatch):
+    from quiettube.tasks import TaskResult
+    window.demo = False
+    window.store.cookie_path.write_text('synthetic browser session')
+    window.open_account()
+    requests = []
+    monkeypatch.setattr(window.tasks, 'submit', lambda request: requests.append(request))
+    window.oauth_request('oauth_connect')
+    generation = window.tasks.generation
+    window.account_window.close()
+    window.on_result(TaskResult(generation, {'connected': True, 'account_connected': True}))
+    assert not window.oauth_mode()
+    window.store.set('account_mode', 'oauth')
+    window.store.set('oauth_authorized', True)
+    window.pending = 'feed'
+    count = len(requests)
+    window.on_result(TaskResult(window.tasks.generation, {'code': 'sign_in_required'}, 'Sign in again'))
+    assert window.oauth_mode()
+    assert not window.account_available()
+    assert len(requests) == count
+    assert window.store.cookie_path.exists()
+    assert 'sign in needed' in window.account_button.get_label()
+
+
+def test_oauth_forget_preserves_queue_and_does_not_activate_saved_browser_session(window, monkeypatch):
+    from quiettube.tasks import TaskResult
+    window.demo = False
+    window.store.set('account_mode', 'oauth')
+    window.store.set('oauth_authorized', True)
+    window.store.cookie_path.write_text('synthetic browser session')
+    before = window.controller.queue.to_dict()
+    window.open_account()
+    monkeypatch.setattr(window.tasks, 'submit', lambda request: None)
+    window.oauth_request('oauth_forget')
+    window.on_result(TaskResult(window.tasks.generation, {'forgotten': True}))
+    assert window.controller.queue.to_dict() == before
+    assert not window.account_available()
+    assert window.oauth_mode()
+    assert window.store.cookie_path.exists()
+    assert not window.videos
+    window.account_window.close()
+
+
+def test_oauth_pagination_uses_tokens_and_refresh_resets_them(window, monkeypatch):
+    from quiettube.tasks import TaskResult
+    window.demo = False
+    window.store.set('account_mode', 'oauth')
+    window.store.set('oauth_authorized', True)
+    window.feed = 'search'
+    window.query = 'example'
+    requests = []
+    monkeypatch.setattr(window.tasks, 'submit', lambda request: requests.append(request))
+    window.pending = 'feed'
+    window.on_result(TaskResult(window.tasks.generation, {'videos': [], 'has_more': True, 'next_page_token': 'page-two'}))
+    window.change_page(1)
+    assert requests[-1]['page_token'] == 'page-two'
+    window.reload()
+    assert requests[-1]['page'] == 0 and requests[-1]['page_token'] == ''
+    assert requests[-1]['refresh'] is True

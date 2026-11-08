@@ -1,4 +1,7 @@
 .venv/
+oauth-client*.json
+client_secret*.json
+*oauth-tokens*.json
 __pycache__/
 *.pyc
 .coverage

@@ -47,12 +47,12 @@ in `.venv`, with system-site-packages enabled for the distribution's GTK binding
 
 ## Connect your YouTube account
 
-These instructions describe the current browser-session implementation. For the
-reasons we are investigating optional personal OAuth credentials, project quotas,
-costs and remaining limitations, read [account direction](account-direction.md).
-Try browser-session import first and evaluate QuietTube at your own pace; no
-Google Cloud setup is needed for it. Personal OAuth is planned and is not yet
-available through this dialog. There is no timed evaluation or forced migration.
+These first steps describe browser-session mode, which needs no Google Cloud
+setup. Evaluate it at your own pace; there is no timed evaluation or forced
+migration. Optional personal OAuth is available experimentally under **Connect
+YouTube → Personal OAuth · experimental**. Its panel has the Google links, exact
+fields and JSON import; see the [setup guide](personal-oauth-setup.md) and
+[account trade-offs](account-direction.md). Live OAuth reliability is not yet verified.
 
 1. Click **Connect YouTube**, then **Open YouTube sign-in**.
 2. Sign in on the real YouTube website in your normal browser. Choose the desired
@@ -83,7 +83,7 @@ locally during connection; cookies from other websites are discarded. The retain
 session is stored as a plaintext file with mode `0600` inside a `0700` directory
 owned by your Linux user, outside the repository. It is sent only as needed to
 YouTube/Google's media infrastructure, never to an app backend. Temporary copies
-are removed after requests and playback end. **Disconnect** stops playback and
+are removed after requests and playback end. **Remove saved browser session** stops playback and
 removes the saved session and feed thumbnails; the local queue/history remain.
 
 YouTube may expire the session or restrict unofficial clients. Reconnect through
@@ -92,7 +92,30 @@ restrictions; keep requests modest. QuietTube fetches one bounded page at a time
 and does not poll feeds in the background. Account feeds depend on YouTube and
 may occasionally need an extractor update. No personal account is bundled.
 
+### Personal OAuth mode
+
+Import the Desktop JSON or paste its Client ID and Client secret, save to the
+keyring, then **Sign in with Google**. Saving configuration alone does not switch
+modes. Successful sign-in selects OAuth and the header identifies it. Home and
+Subscriptions both show a bounded newest-first snapshot of subscription uploads;
+Watch Later is unavailable, and Shorts may appear. Liked videos and explicit Likes
+use the API. Search also consumes your project's API quota in this mode.
+
+Account data uses refreshable authorization independent of copied browser cookies.
+The player still uses public yt-dlp/mpv access, without OAuth tokens or browser
+cookies. Restricted videos may fail. A failed request preserves the queue; expired
+authorization asks for Google sign-in rather than silently using browser cookies.
+Use **Connect browser session** to switch back deliberately. Switching stops the
+player but preserves its queue and position for manual resume.
+
+**Remove personal OAuth from keyring** deletes the local client and tokens; it does
+not revoke Google's grant. Use the dialog's Google permissions link to do that.
+Removing browser cookies and removing OAuth are separate actions. Neither deletes
+the local queue/history. See the setup guide for keyring and expiry troubleshooting.
+
 ## Watch your way
+
+The feed descriptions below refer to browser-session mode unless stated otherwise.
 
 - **Home:** your signed-in YouTube home recommendations, subject to extraction
   support; not guaranteed to be identical to the browser's current page.

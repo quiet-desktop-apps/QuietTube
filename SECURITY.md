@@ -17,3 +17,13 @@ Authentication/session data is sensitive even when file permissions restrict it.
 Do not assume local files are encrypted. See the app's architecture and user guide
 for storage and service limitations. Do not use this project for cases requiring
 formal security assurances.
+
+Personal OAuth client configuration and tokens use the desktop Secret Service
+keyring with no plaintext fallback. Use a password-protected keyring. The app
+cannot protect a Google JSON download placed in the checkout, pasted chat text,
+clipboard history, screenshots or backups outside that keyring. Keep downloads
+outside the repository and never include them in reports. Common client JSON
+filenames are ignored as an extra safeguard, not a guarantee against publication.
+Browser-session cookies remain plaintext with private file permissions; choosing
+OAuth does not delete previously imported cookies. Remove each method explicitly
+in the connection dialog. Local OAuth removal is separate from revocation in Google.

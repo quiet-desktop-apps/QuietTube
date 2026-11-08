@@ -123,3 +123,16 @@ def test_pause_saves_resume_position_immediately(tmp_path):
     assert store.load_queue().current.position == 95.25
     controller.close()
     store.close()
+
+
+def test_personal_oauth_playback_never_receives_saved_browser_credentials(tmp_path):
+    store, player, controller = build(tmp_path)
+    store.cookie_path.write_text('synthetic browser session')
+    store.set('account_mode', 'oauth')
+    controller.reload()
+    assert player.starts[-1][3] is None
+    store.set('account_mode', 'browser')
+    controller.reload()
+    assert player.starts[-1][3] == store.cookie_path
+    controller.close()
+    store.close()

@@ -110,6 +110,9 @@ def fetch(request: dict, session: Path | None) -> dict:
 
 def execute(request: dict) -> dict:
     action = request.get("action", "fetch")
+    if action.startswith("oauth_") or request.get("account_mode") == "oauth":
+        from .youtube_api import execute_account
+        return execute_account(request)
     destination = Path(request["session"]) if request.get("session") else None
     with tempfile.TemporaryDirectory(prefix="quiettube-session-") as temp:
         snapshot = Path(temp) / "youtube.txt"
@@ -170,14 +173,25 @@ def friendly_error(error: Exception) -> str:
 
 def main():
     os.umask(0o077)
+    request = {}
     try:
         raw = sys.stdin.buffer.read(16_385)
         if len(raw) > 16_384:
             raise ValueError("Request too large")
-        result = execute(json.loads(raw))
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError("Invalid request")
+        request = parsed
+        result = execute(request)
         print(json.dumps({"ok": True, **result}))
     except Exception as error:
-        print(json.dumps({"ok": False, "error": friendly_error(error)}))
+        if request.get("account_mode") == "oauth" or str(request.get("action", "")).startswith("oauth_"):
+            from .account import AccountError
+            message = str(error) if isinstance(error, AccountError) else "The personal OAuth request failed. Check the setup and retry."
+            code = error.code if isinstance(error, AccountError) else "account_error"
+            print(json.dumps({"ok": False, "error": message, "code": code}))
+        else:
+            print(json.dumps({"ok": False, "error": friendly_error(error)}))
 
 
 if __name__ == "__main__":

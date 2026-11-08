@@ -2,7 +2,8 @@
 
 Date: 8 November 2026. Human owner: Paulo Aboim Pinto.
 
-Status: accepted as a direction for investigation and documentation; implementation,
+Status: accepted for an experimental implementation at the human owner’s request.
+Configuration, keyring storage and API routing are implemented in this branch;
 live verification and service-policy suitability remain incomplete. ADR 0001's
 native UI and resource bounds remain in force.
 
@@ -33,11 +34,13 @@ Ship no shared maintainer registration. Keep credentials out of the source tree
 and public artifacts. Preserve MIT licensing and local queue/history ownership;
 distinguish these software freedoms from access to Google.
 
-Describe this as planned until usable and verified. Keep current browser-session
-instructions accurate in the meantime. Do not bundle the unfinished shared-client
-experiment with this documentation change. Future connection switching must
-preserve queue/history, make the active method explicit and avoid silently
-restoring browser-cookie dependence when OAuth fails.
+Label the implementation experimental until live use is verified. Keep browser-
+session instructions accurate. Store the personal client and tokens in the Linux
+Secret Service keyring with no plaintext fallback; accept JSON import or manual
+Client ID/secret fields. Include precise Google setup links in the native panel.
+Switching preserves queue/history, identifies the active method and never silently
+restores browser-cookie dependence when OAuth fails. State/PKCE, token renewal,
+keyring round-trips and mode transitions are tested with synthetic data.
 
 ## Consequences and unresolved work
 
