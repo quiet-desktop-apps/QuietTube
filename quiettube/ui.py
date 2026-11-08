@@ -18,6 +18,7 @@ from .thumbnails import Thumbnails
 
 APP_ID = "ch.aboimpinto.QuietTube"
 VIDEO_CARD_WIDTH = 400
+ACCOUNT_OPERATIONS = {"connect", "oauth_configure", "oauth_connect", "oauth_forget"}
 
 DEMO_VIDEOS = [
     Video("jNQXAC9IVRw", "An afternoon outside: finding a slower rhythm", "Everyday stories", 842),
@@ -105,6 +106,8 @@ class MainWindow(Gtk.ApplicationWindow):
         self.queue_signature = None
         self.last_selected = None
         self.account_window = None
+        self.oauth_verified = False
+        self.page_tokens = {0: ""}
         self.busy = False
         self._build()
         self.connect("close-request", self.on_close)
@@ -118,7 +121,7 @@ class MainWindow(Gtk.ApplicationWindow):
         else:
             self.show_empty("Your videos. A little more breathing room.",
                             "Connect YouTube for your home feed and subscriptions, or search for a video to get started.")
-            if self.store.cookie_path.exists():
+            if self.account_available():
                 self.load_feed("home")
         self.refresh_transport()
         if self.store.load_warning:
@@ -296,6 +299,7 @@ class MainWindow(Gtk.ApplicationWindow):
         # A session import is atomic; prevent a second account mutation until completion/cancel.
         if self.account_window:
             self.account_actions.set_sensitive(not busy)
+            self.oauth_actions.set_sensitive(not busy)
 
     def show_empty(self, title, message, reset=True):
         self.thumbnails.new_page()
@@ -312,7 +316,7 @@ class MainWindow(Gtk.ApplicationWindow):
         empty.append(label("▷", "heading"))
         empty.append(label(title, "subheading", True))
         empty.append(label(message, "muted", True))
-        if not self.demo and not self.store.cookie_path.exists():
+        if not self.demo and not self.account_available():
             connect = button("Connect your YouTube account", self.open_account, "suggested-action")
             connect.set_halign(Gtk.Align.START)
             empty.append(connect)
@@ -458,17 +462,21 @@ class MainWindow(Gtk.ApplicationWindow):
         self.next_button.set_sensitive(not self.busy and self.has_more)
 
     def load_feed(self, kind):
-        if self.pending == "connect" and self.busy:
+        if self.pending in ACCOUNT_OPERATIONS and self.busy:
             self.set_status("Finish or cancel the account connection first.")
             return
         self.tasks.cancel()
         self.set_busy(False)
         self.feed, self.page = kind, 0
+        self.page_tokens = {0: ""}
         self.query = ""
         titles = {"home": "Your home feed", "subscriptions": "Latest from your subscriptions",
                   "later": "Your Watch Later", "liked": "Your liked videos", "history": "Recently watched here"}
         self.feed_title.set_text(titles.get(kind, "Videos"))
         self.feed_caption.set_text("Your YouTube account feed." if kind != "history" else "History saved on this computer.")
+        if self.oauth_mode() and kind in {"home", "subscriptions"}:
+            self.feed_title.set_text("Recent subscription uploads")
+            self.feed_caption.set_text("Personal OAuth · newest uploads, not YouTube Home recommendations.")
         for key, nav in self.nav.items():
             nav.remove_css_class("active")
             if key == kind:
@@ -479,24 +487,41 @@ class MainWindow(Gtk.ApplicationWindow):
         elif kind == "history":
             self.has_more = False
             self.show_videos(self.store.history())
-        elif not self.store.cookie_path.exists():
-            self.show_empty("Bring your YouTube account", "Sign in through your browser, then connect the session here. "
-                            "Your home feed, subscriptions and saved lists will appear in this space.")
+        elif not self.account_available():
+            message = ("Sign in with Google using your saved personal Desktop client." if self.oauth_mode() else
+                       "Connect a browser session to try QuietTube, or configure personal OAuth in Connect YouTube.")
+            self.show_empty("Connect your YouTube account", message)
         else:
             self.request_feed()
 
-    def request_feed(self, open_video=False):
+    def oauth_mode(self):
+        return self.store.get("account_mode", "browser") == "oauth"
+
+    def account_available(self):
+        return bool(self.store.get("oauth_authorized", False)) if self.oauth_mode() else self.store.cookie_path.exists()
+
+    def account_request(self):
+        if self.oauth_mode():
+            return {"account_mode": "oauth", "account_dir": str(self.store.directory)}
+        return {"session": str(self.store.cookie_path)}
+
+    def request_feed(self, open_video=False, refresh=False):
+        if self.pending in ACCOUNT_OPERATIONS:
+            return
         self.pending = "open_video" if open_video else "feed"
         self.set_busy(True)
         self.set_status("Loading from YouTube…")
         self.tasks.submit({"kind": self.feed, "query": self.query, "page": self.page,
-                           "session": str(self.store.cookie_path)})
+                           "page_token": self.page_tokens.get(self.page, ""), "refresh": refresh,
+                           **self.account_request()})
 
     def reload(self):
         if self.demo or self.feed == "history":
             self.load_feed(self.feed)
         else:
-            self.request_feed()
+            self.page = 0
+            self.page_tokens = {0: ""}
+            self.request_feed(refresh=True)
 
     def change_page(self, direction):
         self.page = max(0, self.page + direction)
@@ -506,13 +531,14 @@ class MainWindow(Gtk.ApplicationWindow):
         query = self.search_entry.get_text().strip()
         if not query:
             return
-        if self.pending == "connect" and self.busy:
+        if self.pending in ACCOUNT_OPERATIONS and self.busy:
             self.set_status("Finish or cancel the account connection first.")
             return
         if self.demo:
             self.show_videos([video for video in DEMO_VIDEOS if query.lower() in video.title.lower()])
             return
         self.page, self.query = 0, query
+        self.page_tokens = {0: ""}
         if "://" in query:
             try:
                 self.query = video_id(query)
@@ -551,11 +577,58 @@ class MainWindow(Gtk.ApplicationWindow):
         self.set_busy(False)
         if result.error:
             self.set_status(result.error, True)
-            if operation == "connect" and self.account_window:
-                self.account_progress.set_text(result.error)
+            if operation in ACCOUNT_OPERATIONS and self.account_window:
+                self.account_message(result.error)
+            if self.oauth_mode():
+                code = (result.data or {}).get("code")
+                if code == "unsupported":
+                    self.show_empty("Unavailable with personal OAuth", result.error)
+                else:
+                    self.oauth_verified = False
+                if code in {"sign_in_required", "client_not_configured"}:
+                    self.store.set("oauth_authorized", False)
+                    self.show_empty("Google sign-in needed", "Open Connect YouTube → Personal OAuth to sign in again.")
+                self.refresh_transport()
             return False
         data = result.data or {}
+        if operation == "oauth_configure":
+            self.store.set("oauth_configured", True)
+            self.store.set("oauth_authorized", data.get("authorization_saved", False))
+            if data.get("client_changed"):
+                self.oauth_verified = False
+                if self.oauth_mode():
+                    self.show_empty("Desktop client saved", "Sign in with Google to use this configuration.")
+            self.account_message("Desktop client saved in the keyring. Choose Sign in with Google when ready.")
+            self.set_status("Personal Desktop client saved. Your active connection method has not changed.")
+            self.refresh_transport()
+            return False
+        if operation == "oauth_forget":
+            self.store.set("oauth_configured", False)
+            self.store.set("oauth_authorized", False)
+            self.oauth_verified = False
+            if self.oauth_mode():
+                self.controller.stop()
+                self.show_empty("Personal OAuth removed", "Sign in again or explicitly connect a browser session.")
+            self.account_message("Personal OAuth removed from the keyring. You can also revoke access on Google's permissions page.")
+            self.set_status("Personal OAuth removed; local queue and history retained.")
+            self.refresh_transport()
+            return False
+        if operation == "oauth_connect":
+            self.controller.stop()
+            self.store.set("account_mode", "oauth")
+            self.store.set("oauth_authorized", True)
+            self.store.set("oauth_configured", True)
+            self.oauth_verified = True
+            self.liked_ids.clear()
+            if self.account_window:
+                self.account_window.close()
+            self.refresh_transport()
+            self.load_feed("home")
+            return False
         if operation == "connect":
+            self.controller.stop()
+            self.store.set("account_mode", "browser")
+            self.oauth_verified = False
             self.liked_ids.clear()
             self.store.set("account_source", self.account_source)
             self.account_button.set_label("YouTube connected")
@@ -570,7 +643,14 @@ class MainWindow(Gtk.ApplicationWindow):
             self.set_status("Could not read these videos. Please retry.", True)
             return False
         self.has_more = data.get("has_more", False)
+        if data.get("next_page_token"):
+            self.page_tokens[self.page + 1] = data["next_page_token"]
+        if self.oauth_mode() and data.get("account_connected"):
+            self.oauth_verified = True
+            self.refresh_transport()
         self.show_videos(videos)
+        if data.get("note"):
+            self.feed_caption.set_text(data["note"])
         self.set_status(f"Showing {len(self.videos)} of {len(videos)} loaded videos. Add anything you like to your queue.")
         if operation == "open_video" and videos:
             self.play_video(videos[0])
@@ -618,10 +698,13 @@ class MainWindow(Gtk.ApplicationWindow):
         if self.demo:
             self.set_status("Likes are disabled in preview mode.")
             return
+        if self.pending in ACCOUNT_OPERATIONS:
+            self.set_status("Finish or cancel the account change before liking a video.")
+            return
         if self.like_pending:
             self.set_status("Wait for YouTube to confirm the current Like request.")
             return
-        if not self.store.cookie_path.exists():
+        if not self.account_available():
             self.set_status("Connect your YouTube account before liking a video.", True)
             self.open_account()
             return
@@ -630,7 +713,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.like_pending = video.id
         self.refresh_like_buttons()
         self.set_status("Sending Like to YouTube…")
-        self.rating_tasks.submit({"action": "like", "video_id": video.id, "session": str(self.store.cookie_path)})
+        self.rating_tasks.submit({"action": "like", "video_id": video.id, **self.account_request()})
 
     def on_like_result(self, result):
         if self.closed or result.generation != self.rating_tasks.generation:
@@ -639,6 +722,10 @@ class MainWindow(Gtk.ApplicationWindow):
         data = result.data or {}
         if result.error:
             self.set_status(result.error + " Like was not confirmed.", True)
+            if self.oauth_mode() and data.get("code") in {"sign_in_required", "client_not_configured"}:
+                self.oauth_verified = False
+                self.store.set("oauth_authorized", False)
+                self.refresh_transport()
         elif ident and data.get("liked") is True and data.get("video_id") == ident:
             if any(video.id == ident for video in self.videos):
                 self.liked_ids.add(ident)
@@ -797,7 +884,11 @@ class MainWindow(Gtk.ApplicationWindow):
                     self.queue_list.select_row(row)
             self.queue_signature = signature
             self.queue_title.set_text(f"Up next · {len(queue.upcoming)}")
-        self.account_button.set_label("YouTube connected" if self.store.cookie_path.exists() else "Connect YouTube")
+        if self.oauth_mode():
+            state = "connected" if self.oauth_verified else ("saved" if self.account_available() else "sign in needed")
+            self.account_button.set_label("Personal OAuth · " + state)
+        else:
+            self.account_button.set_label("YouTube connected" if self.store.cookie_path.exists() else "Connect YouTube")
 
     def quality_changed(self, *_):
         self.controller.height = [480, 720, 1080, 1440, 2160][self.quality.get_selected()]
@@ -817,14 +908,18 @@ class MainWindow(Gtk.ApplicationWindow):
             self.account_window.present()
             return
         dialog = Gtk.Window(title="Connect YouTube", transient_for=self, modal=True)
-        dialog.set_default_size(560, 520)
+        dialog.set_default_size(680, 760)
         self.account_window = dialog
         dialog.connect("close-request", self.account_closed)
         content = box(spacing=14)
         for setter in (content.set_margin_start, content.set_margin_end, content.set_margin_top, content.set_margin_bottom):
             setter(24)
-        dialog.set_child(content)
-        content.append(label("Bring your own YouTube", "heading"))
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_child(content)
+        dialog.set_child(scroll)
+        content.append(label("Connect your YouTube", "heading"))
+        content.append(label("Start with a browser session, or configure your own Desktop OAuth client below.", "muted", True))
         content.append(label("Sign in on YouTube in your browser, then connect that browser's session. "
                              "Your password stays with Google. You can close the browser afterward.", "muted", True))
         content.append(button("1. Open YouTube sign-in", lambda: Gio.AppInfo.launch_default_for_uri(
@@ -851,17 +946,107 @@ class MainWindow(Gtk.ApplicationWindow):
         self.account_actions.append(button("3. Connect browser session", self.connect_browser, "suggested-action"))
         self.account_actions.append(button("Import a YouTube cookies.txt file instead", self.choose_cookies))
         if self.store.cookie_path.exists():
-            self.account_actions.append(button("Disconnect and remove saved session", self.disconnect))
+            self.account_actions.append(button("Remove saved browser session", self.disconnect))
         content.append(self.account_actions)
         self.account_progress = label("", "small", True)
         content.append(self.account_progress)
         content.append(label("Uses unofficial YouTube access. YouTube can restrict it or require a fresh login. "
                              "The queue is local; it does not modify your YouTube playlists.", "muted small", True))
+        self.build_oauth_setup(content)
+        self.set_busy(self.busy)
         dialog.present()
 
+    def build_oauth_setup(self, content):
+        from .oauth_help import SETUP_STEPS, SCOPES_TEXT, STORAGE_TEXT, LIMITS_TEXT
+        self.oauth_expander = Gtk.Expander(label="Personal OAuth · experimental")
+        self.oauth_expander.set_expanded(self.oauth_mode())
+        content.append(self.oauth_expander)
+        panel = box(spacing=14)
+        self.oauth_expander.set_child(panel)
+        panel.append(label("Your project, your connection", "subheading"))
+        panel.append(label(LIMITS_TEXT, "muted small", True))
+        for title, url, instructions in SETUP_STEPS:
+            if url:
+                link = Gtk.LinkButton.new_with_label(url, title)
+                link.set_halign(Gtk.Align.START)
+                panel.append(link)
+            else:
+                panel.append(label(title, "subheading"))
+            panel.append(label(instructions, "small", True))
+            if title.startswith("5."):
+                scope = Gtk.Entry(text=SCOPES_TEXT, editable=False)
+                scope.set_tooltip_text("Select and copy this scope into Google's Data Access screen")
+                panel.append(scope)
+        panel.append(label(STORAGE_TEXT, "muted small", True))
+        self.oauth_actions = box(spacing=8)
+        panel.append(self.oauth_actions)
+        self.oauth_actions.append(button("Import Desktop JSON", self.choose_oauth_client, "suggested-action"))
+        self.oauth_actions.append(label("Or paste the two values from your Desktop client:", "small", True))
+        self.oauth_actions.append(label("Client ID", "small"))
+        self.oauth_client_id = Gtk.Entry(placeholder_text="…apps.googleusercontent.com", max_length=256)
+        self.oauth_actions.append(self.oauth_client_id)
+        self.oauth_actions.append(label("Client secret", "small"))
+        self.oauth_client_secret = Gtk.Entry(placeholder_text="Desktop OAuth client secret", visibility=False,
+                                             input_purpose=Gtk.InputPurpose.PASSWORD, max_length=512)
+        self.oauth_actions.append(self.oauth_client_secret)
+        self.oauth_actions.append(button("Save to keyring", self.save_oauth_client))
+        self.oauth_actions.append(button("Sign in with Google", lambda: self.oauth_request("oauth_connect"), "suggested-action"))
+        self.oauth_actions.append(button("Remove personal OAuth from keyring", lambda: self.oauth_request("oauth_forget")))
+        message = ("A Desktop configuration was saved here. Sign in to verify it." if self.store.get("oauth_configured")
+                   else "Import or save your Desktop client, then sign in. Saving alone does not change your connection.")
+        self.oauth_progress = label(message, "small", True)
+        panel.append(self.oauth_progress)
+        panel.append(Gtk.LinkButton.new_with_label("https://myaccount.google.com/connections", "Review or revoke access on Google"))
+
+    def account_message(self, text):
+        if self.account_window:
+            self.account_progress.set_text(text)
+            self.oauth_progress.set_text(text)
+
+    def oauth_request(self, action, **fields):
+        if self.demo or not self.account_window:
+            return
+        if self.like_pending:
+            self.account_message("Wait for the current Like request to finish before changing account configuration.")
+            return
+        self.tasks.cancel()
+        self.pending = action
+        self.set_busy(True)
+        message = ("Complete sign-in in your default browser. Close this dialog to cancel."
+                   if action == "oauth_connect" else "Accessing your desktop keyring…")
+        self.account_message(message)
+        self.set_status(message)
+        self.tasks.submit({"action": action, "account_dir": str(self.store.directory), **fields})
+
+    def save_oauth_client(self):
+        ident = self.oauth_client_id.get_text().strip()
+        secret = self.oauth_client_secret.get_text().strip()
+        self.oauth_client_id.set_text("")
+        self.oauth_client_secret.set_text("")
+        self.oauth_request("oauth_configure", client_id=ident, client_secret=secret)
+
+    def choose_oauth_client(self):
+        chooser = Gtk.FileChooserNative(title="Import your Google Desktop client JSON", transient_for=self.account_window,
+                                         action=Gtk.FileChooserAction.OPEN, accept_label="Import", cancel_label="Cancel")
+        file_filter = Gtk.FileFilter()
+        file_filter.set_name("Google Desktop OAuth JSON")
+        file_filter.add_pattern("*.json")
+        chooser.add_filter(file_filter)
+        def response(dialog, result):
+            if result == Gtk.ResponseType.ACCEPT and self.account_window and not self.closed:
+                file = dialog.get_file()
+                path = file.get_path() if file else None
+                if path:
+                    self.oauth_request("oauth_configure", client_file=path)
+            dialog.destroy()
+        chooser.connect("response", response)
+        chooser.show()
+
     def account_closed(self, *_):
-        if self.pending == "connect":
+        if self.pending in ACCOUNT_OPERATIONS:
             self.cancel_request()
+        self.oauth_client_id.set_text("")
+        self.oauth_client_secret.set_text("")
         self.account_window = None
         return False
 
@@ -907,7 +1092,10 @@ class MainWindow(Gtk.ApplicationWindow):
             self.account_window.close()
         self.load_feed("home")
         self.refresh_transport()
-        self.set_status("Disconnected. Saved session removed; your local queue and history are retained.")
+        if self.oauth_mode():
+            self.set_status("Browser session removed. Personal OAuth stays selected; use Remove personal OAuth to delete its keyring entry.")
+        else:
+            self.set_status("Disconnected. Saved session removed; your local queue and history are retained.")
 
     def checkpoint(self):
         if self.closed:
@@ -923,6 +1111,8 @@ class MainWindow(Gtk.ApplicationWindow):
             GLib.source_remove(self.checkpoint_timer)
             self.tasks.close()
             self.rating_tasks.close()
+            if self.account_window:
+                self.account_window.close()
             self.thumbnails.close()
             self.controller.close()
             self.store.close()

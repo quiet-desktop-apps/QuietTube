@@ -8,6 +8,8 @@ YouTube or Google, or grant rights to their trademarks.
 |---|---|
 | yt-dlp Python package | Extraction; Unlicense, with separate notices for optional/bundled components |
 | yt-dlp-ejs and JavaScript dependencies | Extractor support; retain their Unlicense/MIT/ISC notices as applicable |
+| google-auth, google-auth-oauthlib | Google OAuth client libraries; Apache-2.0 |
+| requests, requests-oauthlib, oauthlib | HTTP and OAuth transport; Apache-2.0 / ISC / BSD respectively |
 | SecretStorage | Linux keyring integration; BSD license |
 | Python, PyGObject, GTK, GLib | Native runtime; system package licenses including PSF/LGPL |
 | mpv | External player; GPL/LGPL depending on build/components |

@@ -1,8 +1,60 @@
 # QuietTube verification
 
-Verified on 7 November 2026 on this Linux workstation. The original checks below predate the independent public repository.
+Verified on 7 November 2026 on this Linux workstation. The historical playback checks below predate the independent public repository.
 No binary packages for other distributions were produced by these checks.
 
+
+## OAuth PR review corrections — 8 November 2026
+
+Review found three reproducible defects: subscription sync queued the entire
+account before observing quota/auth failures, malformed fresh cache records could
+be repeatedly returned, and unsupported Watch Later kept the previous feed's
+cards under its new heading while downgrading the connected status.
+
+Nine new regression cases failed before the fixes and passed afterward. Upload-list
+requests now run in batches of at most four and stop scheduling on error; the old
+snapshot is retained. Cache records are validated before reuse and rebuilt when
+invalid. Unsupported feeds show an empty explanatory state while preserving account
+status and the playback queue. The complete local `./test.sh` run passed **194
+tests**, no skips/failures, with **88% statement coverage**. The existing GTK/Python
+deprecation warnings remain. No real account requests or ratings were performed.
+
+## Personal Desktop OAuth experiment — 8 November 2026
+
+`./test.sh`: **185 passed**, no failed or skipped tests, **88% overall statement
+coverage**. After a timezone-only correction to synthetic token fixtures, the
+28 account tests also passed separately. The existing GTK/Python deprecation
+warnings remain; no warning suppression was added.
+
+- Desktop JSON and manual inputs validate before replacing configuration. Invalid,
+  oversized and non-Desktop inputs preserve previous authorization. Imported
+  endpoints cannot redirect the token exchange.
+- Real Google OAuthlib loopback callbacks exercise state validation and PKCE with
+  synthetic authorization codes and intercepted HTTP token exchange. Incorrect
+  state is rejected before exchange; no Google account or live endpoint is used.
+- A real worker stores a synthetic client through Secret Service in an isolated
+  D-Bus session and temporary password-protected GNOME keyring. Read/update/delete
+  and per-library isolation pass; neither the client secret nor refresh token is
+  present in plaintext files. This never opens the user's login keyring.
+- Locked/unavailable keyrings fail without a file fallback. Tests cover refresh
+  rotation, revoked authorization, transient renewal failure, malformed requests,
+  sanitized errors and exclusion of client JSON from package data.
+- Synthetic API tests cover feed ordering/deduplication/cache bounds, pagination,
+  explicit Likes, unsupported Watch Later, quota errors, bounded responses and a
+  single 401 renewal attempt. Failures do not overwrite an existing feed cache.
+- GTK tests verify setup fields, clearing pasted values, explicit mode selection,
+  cancellation/stale completion, preserved queues and no browser-cookie fallback.
+  The controller passes no cookies to mpv in OAuth mode. Existing native playback,
+  queue and 200-refresh memory regressions still pass.
+- The setup panel was rendered and visually inspected under Xvfb, including its
+  instructions and import/manual fields. Screenshots contain only offline demo
+  data and are ignored under `test-output/oauth-setup-*.png`.
+
+**Not verified:** real Google consent, account feeds/Like writes, renewal over days,
+restricted playback, long-term memory in OAuth mode, or a realistic daily quota
+budget. No real credentials were imported and no user ratings changed. Synthetic
+success does not establish that OAuth improves reliability or resolves Google's
+service-policy questions. Clean-runner CI is tracked on the implementation PR.
 
 ## Open-source publication preparation — 8 November 2026
 
@@ -33,7 +85,7 @@ version references in them are historical, not current release instructions.
 
 Command: `./test.sh` from `QuietTube/`.
 
-- **133 passed**, no failed or skipped tests in the latest recorded run.
+- **133 passed**, no failed or skipped tests in the original development run.
 - **89% overall statement coverage**; video/queue models 96%, storage 94%, playback
   controller 99%, thumbnail cache 95%, native UI 90%, Like adapter 99%.
 - Queue insertion in the middle, moving to a position, removal, duplicate video

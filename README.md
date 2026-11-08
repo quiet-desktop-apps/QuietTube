@@ -67,8 +67,11 @@ restart. See the [full user guide](docs/usage.md) for controls and troubleshooti
 
 ## Account connection and limits
 
-**Current implementation: browser-session import. Personal OAuth configuration is
-a proposed direction, not a released feature.**
+**Browser-session import remains the default. QuietTube also implements optional
+personal OAuth as an experiment; live Google sign-in and daily reliability are not
+yet verified.** Open **Connect YouTube → Personal OAuth · experimental** for the
+setup instructions, JSON import and manual fields. See the
+[personal OAuth setup guide](docs/personal-oauth-setup.md).
 
 **Connect YouTube** opens the real sign-in page in your regular browser. QuietTube
 then imports your selected browser session locally after you request it, keeping
@@ -122,17 +125,16 @@ The intended adoption path is **try first, configure more only if it helps**:
    and whether reconnections or account-feed problems are disruptive. There is no
    timed trial, payment step or requirement to encounter problems before choosing
    another connection method.
-3. **Optionally configure personal OAuth, once available.** Users who want
-   browser-independent account authorization could create their own Google Cloud
-   project, enable YouTube Data API v3 and import a Desktop OAuth configuration.
-   Browser-session import would remain an option; migration would not be forced.
+3. **Optionally try personal OAuth.** Create your own Google Cloud project, enable
+   YouTube Data API v3 and import a Desktop OAuth configuration using the in-app
+   instructions. Browser-session import remains an option; migration is not forced.
 
-Personal OAuth is planned, not available in the current connection dialog. Its
-configuration and user tokens would stay outside GitHub and the source tree.
-Routine renewal would use OAuth refresh tokens instead of copied browser cookies;
-Google sign-in would still open a browser temporarily and could be needed again
-after revocation. It would be a different connection method with feature trade-offs,
-not a guaranteed improvement to every feed or playback problem.
+Personal OAuth configuration and user tokens are stored only in the Linux Secret
+Service keyring, with no plaintext fallback or bundled app registration. Keep the
+original Google download outside the checkout too. Routine renewal uses OAuth
+refresh tokens; Google sign-in still opens a browser temporarily and may be needed
+again after expiry or revocation. Home becomes recent subscription uploads, and
+Watch Later is unavailable in this mode. OAuth does not authenticate mpv playback.
 
 **We expect OAuth may improve account reliability, but we have not tested that
 expectation with a live account.** Personal setup is an experiment, not a proven
@@ -163,7 +165,7 @@ This direction adds setup work and still has unresolved service-policy and
 playback questions. Google requires one API project per API client and prohibits
 artificially spreading usage across projects to obtain more quota. We have **not
 established that distributing this optional personal-project mode is approved**;
-this proposal is not a quota-bypass mechanism. OAuth also does not provide mpv
+this experiment is not a quota-bypass mechanism. OAuth also does not provide mpv
 with supported media streams or reproduce every website feature.
 [Google's policy explanation](https://developers.google.com/youtube/terms/developer-policies-guide)
 
@@ -184,7 +186,7 @@ protect `master`.
 
 ```bash
 # Test dependencies; setup.sh must have completed first.
-sudo apt install xvfb xauth ffmpeg python3-pil
+sudo apt install xvfb xauth ffmpeg python3-pil dbus-x11 gnome-keyring
 .venv/bin/python -m pip install -r requirements-dev.txt
 ./test.sh
 ```

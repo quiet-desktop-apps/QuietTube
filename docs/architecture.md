@@ -4,10 +4,9 @@ QuietTube uses Python/GTK4 for the interface, SQLite for local state, disposable
 workers for yt-dlp extraction and one mpv process for playback. It does not embed
 Chromium or a webview. See [ADR 0001](decisions/0001-native-clients.md).
 
-This page describes the current implementation. The proposed optional OAuth
-alternative to browser-session import is documented in [account direction](account-direction.md)
-and [ADR 0002](decisions/0002-personal-account-connection.md); it is not yet a
-released OAuth integration.
+Browser-session mode remains the default. The optional personal OAuth path below
+is implemented experimentally and has no live-account verification yet. See
+[account direction](account-direction.md) and [ADR 0002](decisions/0002-personal-account-connection.md).
 
 ```mermaid
 flowchart LR
@@ -20,6 +19,9 @@ flowchart LR
     UI --> Import["Explicit browser-session import"]
     Import --> Cookies["Private local YouTube cookies"]
     Cookies --> Tasks
+    Tasks --> API["Personal OAuth / YouTube Data API"]
+    API <--> Vault["Linux Secret Service keyring"]
+    API --> YouTube
     UI --> Thumbnails["Bounded thumbnail cache"]
 ```
 
@@ -31,7 +33,10 @@ flowchart LR
 | `player.py` | mpv lifecycle, IPC and typed player events |
 | `tasks.py`, `worker.py` | Extraction/session worker lifecycle and completion replies |
 | `browsers.py` | Explicit browser/profile discovery for session import |
-| `ratings.py` | User-requested Like operation and confirmation |
+| `ratings.py` | Browser-session Like operation and confirmation |
+| `account.py` | Desktop configuration, keyring storage, loopback authorization and token renewal |
+| `youtube_api.py` | Bounded API feeds, pagination, quota errors and explicit Likes |
+| `oauth_help.py` | In-app Google setup steps and limitations |
 | `thumbnails.py` | Size/count/concurrency-limited thumbnail downloads |
 | `diagnostics.py` | Private bounded playback logs with allowlisted fields |
 
@@ -47,7 +52,14 @@ Feeds display at most 30 videos/page and replace the current page. Queries allow
 up to 10 pages. The thumbnail cache holds at most 64 compressed images of at most
 192 KiB each, with two concurrent requests; only displayed cards hold decoded
 textures. Extraction processes exit after each task or are terminated with their
-children on cancellation/timeouts. Tasks time out after 90 seconds.
+children on cancellation/timeouts. Browser tasks time out after 90 seconds; OAuth
+API tasks after 180 seconds, authorization after 330 seconds (including up to
+240 seconds for user consent). OAuth subscription snapshots cache up to 300
+metadata records for ten minutes, drawn from up to 500 subscriptions and ten
+uploads per channel, with four concurrent requests. Responses are capped at 2 MiB.
+Manual Refresh rebuilds that snapshot; failed syncs do not overwrite it. Invalid
+cache records trigger a rebuild. Upload-list requests run in batches of at most
+four; an error stops subsequent batches instead of queuing the whole account.
 
 One mpv process runs at a time. Its demuxer buffers are capped at 64 MiB forward
 and 8 MiB backward. Decoder, renderer, GPU and process overhead are additional.
@@ -58,7 +70,7 @@ five seconds and on pause/normal close. Playback resume is manual after restart.
 
 ## Account, privacy and network boundaries
 
-The user signs in through their existing browser and explicitly asks QuietTube
+In browser-session mode, the user signs in through their existing browser and explicitly asks QuietTube
 to connect that session. A local worker reads the chosen browser profile, filters
 for YouTube cookies, validates access and retains only the necessary YouTube
 session. This is not a Google OAuth application or an embedded password form.
@@ -68,6 +80,27 @@ Cookies are plaintext files with `0600` permissions in a `0700` directory;
 they are not encrypted at rest. Disposable copies are removed after requests or
 playback. Disconnect stops playback and removes saved session/feed thumbnails,
 while keeping the local queue and history.
+
+In personal OAuth mode, client configuration and tokens occupy one Secret Service
+item per local library. Attributes contain only an application identifier and a
+hash of the library path. An unavailable/locked keyring fails closed; there is no
+file fallback. Use a password-protected desktop keyring. SQLite stores only mode
+and status hints, never credentials. An empty private lock file coordinates token
+renewal across workers. The original downloaded Google JSON is not removed.
+
+Google authorization uses a random loopback port, state validation and PKCE via
+Google's OAuth library. Input endpoints are allowlisted; imported URLs cannot
+redirect tokens elsewhere. Configuration travels to workers over stdin, not command
+arguments. Worker errors are reduced to fixed safe messages. Confirmed sign-in
+selects OAuth; saving client fields alone does not switch modes. Expiry asks for
+sign-in explicitly, with no automatic browser-cookie fallback. Tokens are never
+passed to yt-dlp or mpv. Public playback still depends on extraction; restricted
+playback is not solved by the account API. Switching stops the current player,
+preserving its queue/position, before changing the active account method.
+
+Removing OAuth deletes the keyring item and feed cache; server-side revocation is
+a separate explicit action at the linked Google permissions page. Browser cookies
+remain available until separately removed, but are unused while OAuth is selected.
 
 Requests go to the underlying service/media infrastructure. There is no Quiet
 backend or analytics service. Public searches, feed extraction, thumbnails and

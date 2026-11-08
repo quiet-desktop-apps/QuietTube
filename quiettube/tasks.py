@@ -78,7 +78,12 @@ class ExtractorTasks:
                 self.process = process
             error, data = "", None
             try:
-                process.communicate(json.dumps(request).encode(), timeout=self.timeout)
+                timeout = self.timeout
+                if timeout == 90 and request.get("action") == "oauth_connect":
+                    timeout = 330  # includes consent, keyring unlock and API validation
+                elif timeout == 90 and request.get("account_mode") == "oauth":
+                    timeout = 180  # bounded first subscription sync
+                process.communicate(json.dumps(request).encode(), timeout=timeout)
                 if process.returncode:
                     error = "The YouTube worker stopped unexpectedly. Please retry."
                 elif output.tell() > 1024 * 1024:

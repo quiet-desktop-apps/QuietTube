@@ -1,9 +1,10 @@
 # Account connection: history, direction and trade-offs
 
-Status as of 8 November 2026: the published app uses browser-session import.
-Personal OAuth is a proposed direction. An unfinished development experiment is
-not a working sign-in feature, a release or proof of Google's approval. No real
-OAuth client configuration has been bundled or published by this project.
+Status as of 8 November 2026: browser-session import remains the entry path.
+QuietTube implements optional personal OAuth configuration, keyring storage,
+authorization and bounded API feeds. Synthetic tests are not live account
+verification, a release or proof of Google's approval. No real OAuth client
+configuration is bundled. See the [setup guide](personal-oauth-setup.md).
 
 ## What the first implementation achieved
 
@@ -49,7 +50,7 @@ OAuth must not be presented as a fix for all of them.
 
 ## Try first, choose the connection that fits
 
-The proposed product direction keeps browser-session import as the entry path.
+The product direction keeps browser-session import as the entry path.
 Someone can install QuietTube, connect their existing session and try the native
 interface, queue and mpv playback without first learning Google Cloud setup. The
 browser can then close, subject to the session limitations described above.
@@ -59,8 +60,7 @@ forced migration. People can judge the app's usefulness and observe whether
 reconnection or account-feed problems affect their own usage. They can continue
 with browser-session import while it meets their needs and remains usable.
 
-Once implemented and verified, personal OAuth would be an **optional second
-connection method** for people willing to configure and maintain their own Google
+Personal OAuth is an experimental **optional second connection method** for people willing to configure and maintain their own Google
 project. They need not wait for a failure to choose it. The setup should explain
 which account features change and which problems it addresses before they switch.
 It must not promise identical Home recommendations, unlimited quota, permanent
@@ -78,10 +78,9 @@ token renewal, revoked access and quota exhaustion over ordinary daily use. Comp
 the resulting feed coverage and reconnection burden with browser-session import;
 passing isolated sign-in or synthetic tests is not enough to claim improvement.
 
-Future switching must preserve the local queue and history, clearly identify the
-active connection method and avoid silently falling back to browser cookies when
-OAuth expires. These are implementation requirements, not behavior already
-delivered. Offering two methods also adds maintenance and testing work: both
+Switching preserves the local queue and history, identifies the active connection
+method and avoids silently falling back to browser cookies when OAuth expires.
+These transitions are covered by synthetic GTK tests; live account checks remain. Offering two methods also adds maintenance and testing work: both
 account states, failures and transitions need coverage.
 
 ## Options considered
@@ -100,25 +99,25 @@ That describes product intent, not a change to
 the MIT license: its permissions still include redistribution and commercial use.
 The code's license does not override Google's service terms.
 
-## Intended personal setup
+## Optional personal setup
 
-This is the proposed optional workflow, not a walkthrough of buttons available
-today or a prerequisite for trying the current app:
+The [step-by-step setup guide](personal-oauth-setup.md) matches the native panel.
+This is not a prerequisite for trying browser-session mode:
 
 1. The person creates a Google Cloud project under their own eligible Google
    account and enables YouTube Data API v3. Managed accounts may require their
    administrator's permission.
 2. They configure Google's consent settings and create a **Desktop app** OAuth
    client. A client ID under somebody else's project does not provide a new quota.
-3. QuietTube imports the configuration into private local application storage,
-   outside the checkout. No maintainer credentials, client JSON files, cookies or
+3. QuietTube imports the configuration into the Linux Secret Service keyring,
+   with no plaintext fallback. No maintainer credentials, client JSON files, cookies or
    user tokens belong in GitHub, issue reports or screenshots.
 4. A temporary browser visit lets Google authenticate the person and obtain
    consent. QuietTube does not collect their Google password.
 5. The app uses its own OAuth authorization for account data, renewing access
-   when possible. Disconnect must remove local authorization and support revoking
-   access. Secure token storage and cancellation behavior need implementation and
-   verification before release.
+   when possible. Remove personal OAuth deletes local keyring data; a separate
+   link opens Google permissions to revoke server-side access. Cancellation and
+   storage tests use synthetic data, including an isolated real keyring.
 
 Google documents the Desktop client setup in its
 [YouTube Python quickstart](https://developers.google.com/youtube/data/quickstart/python).
