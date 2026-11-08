@@ -1,4 +1,4 @@
-# ADR 0002: investigate user-owned account connections
+# ADR 0002: browser-session entry path and optional personal OAuth
 
 Date: 8 November 2026. Human owner: Paulo Aboim Pinto.
 
@@ -21,19 +21,33 @@ tool rather than a commercial hosted account service.
 
 ## Direction
 
-Investigate a model where the person supplies a Desktop OAuth configuration from
-their own Google Cloud project, keeps authorization locally and consumes that
-project's allowance. Ship no shared maintainer registration. Keep credentials out
-of the source tree and public artifacts. Preserve MIT licensing and local
-queue/history ownership; distinguish these software freedoms from access to Google.
+Keep browser-session import as the entry path so people can try QuietTube without
+Google developer setup. Let them evaluate its usefulness and session limitations
+at their own pace, without a timed trial, payment or forced migration.
+
+Investigate personal OAuth as an optional second method: the person supplies a
+Desktop OAuth configuration from their own Google Cloud project, keeps
+authorization locally and consumes that project's allowance. They can choose it
+when its benefits justify the setup, without needing to encounter a failure first.
+Ship no shared maintainer registration. Keep credentials out of the source tree
+and public artifacts. Preserve MIT licensing and local queue/history ownership;
+distinguish these software freedoms from access to Google.
 
 Describe this as planned until usable and verified. Keep current browser-session
 instructions accurate in the meantime. Do not bundle the unfinished shared-client
-experiment with this documentation change.
+experiment with this documentation change. Future connection switching must
+preserve queue/history, make the active method explicit and avoid silently
+restoring browser-cookie dependence when OAuth fails.
 
 ## Consequences and unresolved work
 
-Personal setup is harder than a shared Sign in button. Project quotas, token
+Improved account reliability is an untested hypothesis, not an accepted outcome.
+Personal OAuth may replace browser-session problems with a quota bottleneck.
+Measure realistic daily API consumption, feed coverage and reconnection behavior
+before recommending it as an improvement over the existing connection.
+
+Maintaining two connection methods adds testing and support work. Personal setup
+is harder than a shared Sign in button. Project quotas, token
 expiration, account-feature gaps and mpv media access still require explicit
 handling. Separate projects do not establish that Google permits this distribution
 model; the one-project-per-client and quota-sharding rules remain an open question.

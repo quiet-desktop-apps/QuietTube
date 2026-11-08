@@ -21,7 +21,7 @@ This gave us access to account feeds without first running an OAuth application.
 See the [current connection instructions](usage.md#connect-your-youtube-account)
 and [privacy boundaries](architecture.md#account-privacy-and-network-boundaries).
 
-## Why it is not the final connection model
+## Why offer an alternative connection model
 
 A copied session remains a dependency on YouTube's website login:
 
@@ -47,6 +47,43 @@ recommendations are not a complete chronological subscription feed. Decoder,
 network or stream failures are playback issues, not necessarily login failures.
 OAuth must not be presented as a fix for all of them.
 
+## Try first, choose the connection that fits
+
+The proposed product direction keeps browser-session import as the entry path.
+Someone can install QuietTube, connect their existing session and try the native
+interface, queue and mpv playback without first learning Google Cloud setup. The
+browser can then close, subject to the session limitations described above.
+
+Evaluation is informal and user-controlled: there is no countdown, paywall or
+forced migration. People can judge the app's usefulness and observe whether
+reconnection or account-feed problems affect their own usage. They can continue
+with browser-session import while it meets their needs and remains usable.
+
+Once implemented and verified, personal OAuth would be an **optional second
+connection method** for people willing to configure and maintain their own Google
+project. They need not wait for a failure to choose it. The setup should explain
+which account features change and which problems it addresses before they switch.
+It must not promise identical Home recommendations, unlimited quota, permanent
+sign-in or a fix for mpv failures.
+
+The expected improvement is a hypothesis: refreshable OAuth authorization may
+reduce the problems caused by copied website sessions, but live use has not yet
+validated that expectation. We may encounter a new wall in the form of API quota,
+even with a single person owning the entire project allowance. This is an optional
+experiment, not a proven upgrade or a reason to remove the existing method.
+
+Validation must measure requests and quota consumption for realistic subscription
+counts, refresh frequency, pagination, searches and Likes. It must also exercise
+token renewal, revoked access and quota exhaustion over ordinary daily use. Compare
+the resulting feed coverage and reconnection burden with browser-session import;
+passing isolated sign-in or synthetic tests is not enough to claim improvement.
+
+Future switching must preserve the local queue and history, clearly identify the
+active connection method and avoid silently falling back to browser cookies when
+OAuth expires. These are implementation requirements, not behavior already
+delivered. Offering two methods also adds maintenance and testing work: both
+account states, failures and transitions need coverage.
+
 ## Options considered
 
 | Model | What it offers | Difficulty or limitation |
@@ -57,14 +94,16 @@ OAuth must not be presented as a fix for all of them.
 | Personal project and Desktop OAuth client | Locally owned configuration and project allowance; no QuietTube server | Each person must configure Google Cloud; token lifecycle, API feature gaps and distribution-policy questions remain |
 | Local subscriptions without Google account integration | No shared OAuth registration; local library and public-channel feed | No synchronized account Likes/private lists; public extraction still depends on YouTube and can break |
 
-The human-selected direction to investigate is **personal credentials**, not a
-commercial hosted account service. That describes product intent, not a change to
+The human-selected direction is **browser-session import first, with optional
+personal credentials to investigate**, not a commercial hosted account service.
+That describes product intent, not a change to
 the MIT license: its permissions still include redistribution and commercial use.
 The code's license does not override Google's service terms.
 
 ## Intended personal setup
 
-This is the proposed workflow, not a walkthrough of buttons available today:
+This is the proposed optional workflow, not a walkthrough of buttons available
+today or a prerequisite for trying the current app:
 
 1. The person creates a Google Cloud project under their own eligible Google
    account and enables YouTube Data API v3. Managed accounts may require their
@@ -137,7 +176,7 @@ creation is proposed.
   account feature coverage and media access need separate validation.
 - **Independent quota is not unlimited or approved access.** YouTube requires
   one API project per API client and forbids quota sharding. How those rules apply
-  to distributing the same application with mandatory personal projects remains
+  to distributing the same application with optional personal projects remains
   unresolved. Personal or noncommercial intent does not by itself establish an
   exception. We do not present this design as a way to bypass limits or bans.
   [YouTube credentials policy](https://developers.google.com/youtube/terms/developer-policies#d.-accessing-youtube-api-services),
@@ -150,6 +189,7 @@ creation is proposed.
 
 The release criteria are therefore broader than successful sign-in: usable setup,
 private credentials, refresh/revocation handling, accurate account state, bounded
-quota consumption, clear feature differences, tested playback boundaries and an
+quota consumption measured against realistic daily use, clear feature differences,
+tested playback boundaries and an
 established distribution-policy position. This documentation records the direction
 and its limits; it does not claim that those criteria have been met.

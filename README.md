@@ -86,7 +86,7 @@ paid, DRM-protected or bot-challenged videos may not play. Local queue and watch
 history are not synchronized back to YouTube. Software decoding is currently the
 compatibility default and may use more CPU at high resolutions.
 
-## Why the account connection needs to change
+## Why offer another account connection
 
 The first implementation proved that a native video wall and queue can work with
 the browser closed. It reused an existing YouTube login instead of requiring a
@@ -113,12 +113,32 @@ model has **no QuietTube server, subscription, bundled Google registration or
 shared maintainer quota**. Software freedom does not grant unrestricted access to
 Google's services.
 
-The proposed setup is for each person to create their own Google Cloud project,
-enable YouTube Data API v3, create a Desktop OAuth client and import its
-configuration locally. They then authorize their Google account. Configuration
-and user tokens would stay outside GitHub and the source tree. Routine renewal
-would use OAuth refresh tokens instead of copied browser cookies; Google sign-in
-would still open a browser temporarily and could be needed again after revocation.
+The intended adoption path is **try first, configure more only if it helps**:
+
+1. **Try QuietTube today with browser-session import.** Connect an existing YouTube
+   session, close the browser and evaluate the native feed, queue and playback.
+   No Google Cloud project or Desktop OAuth registration is needed for this path.
+2. **Evaluate it at your own pace.** Decide whether QuietTube suits your routine
+   and whether reconnections or account-feed problems are disruptive. There is no
+   timed trial, payment step or requirement to encounter problems before choosing
+   another connection method.
+3. **Optionally configure personal OAuth, once available.** Users who want
+   browser-independent account authorization could create their own Google Cloud
+   project, enable YouTube Data API v3 and import a Desktop OAuth configuration.
+   Browser-session import would remain an option; migration would not be forced.
+
+Personal OAuth is planned, not available in the current connection dialog. Its
+configuration and user tokens would stay outside GitHub and the source tree.
+Routine renewal would use OAuth refresh tokens instead of copied browser cookies;
+Google sign-in would still open a browser temporarily and could be needed again
+after revocation. It would be a different connection method with feature trade-offs,
+not a guaranteed improvement to every feed or playback problem.
+
+**We expect OAuth may improve account reliability, but we have not tested that
+expectation with a live account.** Personal setup is an experiment, not a proven
+upgrade. It may replace session-reconnection problems with another constraint:
+the person's API quota. Separate ownership does not make that allowance unlimited
+or establish that it is enough for their daily use.
 
 **Quota belongs to the Google Cloud project, not the signed-in user or installed
 copy of QuietTube.** Different users, devices or OAuth client IDs using one project
@@ -142,7 +162,7 @@ automatic paid upgrade. Hosting or other paid APIs would be separate costs.
 This direction adds setup work and still has unresolved service-policy and
 playback questions. Google requires one API project per API client and prohibits
 artificially spreading usage across projects to obtain more quota. We have **not
-established that a distributed client requiring personal projects is approved**;
+established that distributing this optional personal-project mode is approved**;
 this proposal is not a quota-bypass mechanism. OAuth also does not provide mpv
 with supported media streams or reproduce every website feature.
 [Google's policy explanation](https://developers.google.com/youtube/terms/developer-policies-guide)

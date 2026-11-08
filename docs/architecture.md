@@ -4,8 +4,8 @@ QuietTube uses Python/GTK4 for the interface, SQLite for local state, disposable
 workers for yt-dlp extraction and one mpv process for playback. It does not embed
 Chromium or a webview. See [ADR 0001](decisions/0001-native-clients.md).
 
-This page describes the current implementation. The proposed replacement for
-browser-session import is documented in [account direction](account-direction.md)
+This page describes the current implementation. The proposed optional OAuth
+alternative to browser-session import is documented in [account direction](account-direction.md)
 and [ADR 0002](decisions/0002-personal-account-connection.md); it is not yet a
 released OAuth integration.
 

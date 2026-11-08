@@ -48,9 +48,11 @@ in `.venv`, with system-site-packages enabled for the distribution's GTK binding
 ## Connect your YouTube account
 
 These instructions describe the current browser-session implementation. For the
-reasons we are investigating personal OAuth credentials, project quotas, costs and
-remaining limitations, read [account direction](account-direction.md). That setup
-is planned and is not yet available through this dialog.
+reasons we are investigating optional personal OAuth credentials, project quotas,
+costs and remaining limitations, read [account direction](account-direction.md).
+Try browser-session import first and evaluate QuietTube at your own pace; no
+Google Cloud setup is needed for it. Personal OAuth is planned and is not yet
+available through this dialog. There is no timed evaluation or forced migration.
 
 1. Click **Connect YouTube**, then **Open YouTube sign-in**.
 2. Sign in on the real YouTube website in your normal browser. Choose the desired
