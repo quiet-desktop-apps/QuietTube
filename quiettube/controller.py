@@ -14,6 +14,7 @@ class PlaybackController:
         self.queue = store.load_queue()
         self.state = "stopped"
         self.error = ""
+        self.error_category = ""
         self.duration = 0.0
         self.height = store.get("quality", 720)
         if self.height not in {480, 720, 1080, 1440, 2160}:
@@ -60,6 +61,7 @@ class PlaybackController:
 
     def _start(self):
         self.error = ""
+        self.error_category = ""
         self.duration = 0
         self.save()
         if not self.queue.current:
@@ -105,6 +107,7 @@ class PlaybackController:
             self.player.stop()
             self.state = "error"
             self.error = str(event.value)
+            self.error_category = event.category
             self.save()
         elif event.kind == "closed":
             self.player.stop()

@@ -136,3 +136,22 @@ def test_personal_oauth_playback_never_receives_saved_browser_credentials(tmp_pa
     assert player.starts[-1][3] == store.cookie_path
     controller.close()
     store.close()
+
+
+def test_playback_verification_preserves_oauth_and_queue_until_explicit_retry(tmp_path):
+    store, player, controller = build(tmp_path)
+    store.set('account_mode', 'oauth')
+    store.set('oauth_authorized', True)
+    controller.event(PlayerEvent(player.generation, 'time-pos', 75))
+    before = controller.queue.to_dict()
+    starts = len(player.starts)
+    controller.event(PlayerEvent(player.generation, 'error', 'Verification needed', 'verification'))
+    assert controller.error_category == 'verification'
+    assert controller.queue.to_dict() == before
+    assert store.get('oauth_authorized') and store.get('account_mode') == 'oauth'
+    assert len(player.starts) == starts
+    controller.reload()
+    assert controller.error_category == ''
+    assert player.starts[-1][1] == 75 and player.starts[-1][3] is None
+    controller.close()
+    store.close()

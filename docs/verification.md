@@ -4,6 +4,35 @@ Verified on 7 November 2026 on this Linux workstation. The historical playback c
 No binary packages for other distributions were produced by these checks.
 
 
+## Playback verification challenge — 9 November 2026
+
+The existing redacted logs showed successful playback earlier, then repeated
+`account` warnings followed by error/closure after the application was left open
+and after a restart. A separate read-only live diagnostic reproduced YouTube's
+“not a bot” challenge for a public sample and the current queued video, without
+cookies or OAuth tokens. It printed only result categories, read queue metadata
+through a read-only SQLite connection, and did not alter queue/history or ratings.
+The installed yt-dlp 2026.10.26 matched the latest stable upstream release checked.
+
+The confirmed defect was the instruction to reconnect the account: the generic
+classifier grouped verification challenges with account-session requirements,
+even in OAuth mode where a new Data API login cannot authorize mpv. Classification
+now distinguishes `verification`, carries the category in the typed player event,
+and records the final category in the private log. Raw URLs/messages remain
+excluded. Playback help exposes manual recovery options and explicitly opening
+the video in a browser at the saved time. No browser session is silently imported
+or used, no automatic retry is added, and Google sign-in is reachable at the top
+of the account dialog.
+
+These changes correct diagnosis and recovery guidance. They **do not establish
+that cookie-free playback has recovered**: the live YouTube verification challenge
+remains unresolved. Deterministic tests use a synthetic failing extractor with
+real mpv, plus GTK/controller checks, and never use a real account session.
+
+`./test.sh` passed all **200 tests** with **88% coverage**. A GTK screenshot
+check also verified the playback-help dialog; its height was increased to keep
+the recovery buttons visible without scrolling on the tested desktop.
+
 ## OAuth PR review corrections — 8 November 2026
 
 Review found three reproducible defects: subscription sync queued the entire

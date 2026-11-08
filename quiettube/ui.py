@@ -9,7 +9,7 @@ from gi.repository import Gdk, Gio, GLib, Gtk, Pango
 
 from .controller import PlaybackController
 from .browsers import suggested_profile
-from .models import Video, duration_label, playlist_url, published_label, publication_sort_key, video_id
+from .models import Video, duration_label, finite_seconds, playlist_url, published_label, publication_sort_key, video_id
 from .player import MpvPlayer
 from .diagnostics import PlaybackLog
 from .storage import Store
@@ -106,6 +106,8 @@ class MainWindow(Gtk.ApplicationWindow):
         self.queue_signature = None
         self.last_selected = None
         self.account_window = None
+        self.oauth_sign_in_shortcut = None
+        self.playback_help_window = None
         self.oauth_verified = False
         self.page_tokens = {0: ""}
         self.busy = False
@@ -246,7 +248,13 @@ class MainWindow(Gtk.ApplicationWindow):
         queue_panel.append(label("Only the current video is buffered.", "muted small"))
 
         self.status = label("Ready", "status", True)
-        root.append(self.status)
+        status_row = box(False, 8)
+        self.status.set_hexpand(True)
+        status_row.append(self.status)
+        self.playback_help_button = button("Playback help", self.open_playback_help)
+        self.playback_help_button.set_visible(False)
+        status_row.append(self.playback_help_button)
+        root.append(status_row)
         transport = box(False, 14)
         transport.add_css_class("transport")
         now = box(spacing=3)
@@ -300,6 +308,8 @@ class MainWindow(Gtk.ApplicationWindow):
         if self.account_window:
             self.account_actions.set_sensitive(not busy)
             self.oauth_actions.set_sensitive(not busy)
+            if self.oauth_sign_in_shortcut:
+                self.oauth_sign_in_shortcut.set_sensitive(not busy)
 
     def show_empty(self, title, message, reset=True):
         self.thumbnails.new_page()
@@ -861,6 +871,7 @@ class MainWindow(Gtk.ApplicationWindow):
             self.now_detail.set_text("Playback opens in a lightweight mpv window.")
         self.play_button.set_label({"playing": "Pause", "paused": "Resume", "loading": "Loading…"}.get(self.controller.state, "Play"))
         self.play_button.set_sensitive(self.controller.state != "loading")
+        self.playback_help_button.set_visible(self.controller.state == "error" and current is not None)
         if self.controller.error:
             self.set_status(self.controller.error, True)
         signature = tuple(item.key for item in queue.upcoming)
@@ -887,8 +898,60 @@ class MainWindow(Gtk.ApplicationWindow):
         if self.oauth_mode():
             state = "connected" if self.oauth_verified else ("saved" if self.account_available() else "sign in needed")
             self.account_button.set_label("Personal OAuth · " + state)
+            self.account_button.set_tooltip_text("Account feed connection. OAuth does not authenticate mpv playback. Click for Google sign-in and settings.")
         else:
             self.account_button.set_label("YouTube connected" if self.store.cookie_path.exists() else "Connect YouTube")
+            self.account_button.set_tooltip_text("Connect or manage the browser session")
+
+    def open_playback_help(self):
+        item = self.controller.queue.current
+        if self.demo or not item:
+            return
+        if self.playback_help_window:
+            self.playback_help_window.present()
+            return
+        dialog = Gtk.Window(title="Playback help", transient_for=self, modal=True)
+        dialog.set_default_size(560, 560)
+        self.playback_help_window = dialog
+        def closed(*_):
+            self.playback_help_window = None
+            return False
+        dialog.connect("close-request", closed)
+        content = box(spacing=14)
+        for setter in (content.set_margin_start, content.set_margin_end, content.set_margin_top, content.set_margin_bottom):
+            setter(24)
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_child(content)
+        dialog.set_child(scroll)
+        content.append(label("Playback and account access are separate", "subheading", True))
+        content.append(label(self.controller.error or "Playback could not start.", "small", True))
+        if self.oauth_mode():
+            explanation = ("Personal OAuth connects your dashboard, subscriptions and Likes. It does not sign mpv into "
+                           "YouTube's video service. The connected badge describes account data only. Signing in with "
+                           "Google again will not fix a playback verification challenge. QuietTube has not switched to browser cookies.")
+        else:
+            explanation = ("Playback uses your imported YouTube website session when one is saved. That session can expire, "
+                           "and YouTube can still require browser verification. Reconnecting it is not a guaranteed fix.")
+        content.append(label(explanation, "muted", True))
+        content.append(label("Wait before retrying if YouTube asks for verification or limits requests. You can open this "
+                             "video on YouTube at the saved position. Browser playback will not advance QuietTube's queue "
+                             "or update its saved position.", "small", True))
+        url = item.video.url + "&t=" + str(int(finite_seconds(item.position))) + "s"
+        def open_video():
+            try:
+                Gio.AppInfo.launch_default_for_uri(url, None)
+            except GLib.Error:
+                self.set_status("Could not open the browser. Use Copy video link instead.", True)
+        self.playback_browser_button = button("Open this video on YouTube", open_video, "suggested-action")
+        content.append(self.playback_browser_button)
+        content.append(button("Copy video link", lambda: self.copy_link(item.video)))
+        def retry():
+            dialog.close()
+            self.reload_video()
+        content.append(button("Retry in mpv at saved position", retry))
+        content.append(button("Close", dialog.close))
+        dialog.present()
 
     def quality_changed(self, *_):
         self.controller.height = [480, 720, 1080, 1440, 2160][self.quality.get_selected()]
@@ -920,6 +983,11 @@ class MainWindow(Gtk.ApplicationWindow):
         dialog.set_child(scroll)
         content.append(label("Connect your YouTube", "heading"))
         content.append(label("Start with a browser session, or configure your own Desktop OAuth client below.", "muted", True))
+        self.oauth_sign_in_shortcut = None
+        if self.oauth_mode():
+            content.append(label("OAuth is selected for account feeds. Google sign-in here does not authenticate mpv playback.", "small", True))
+            self.oauth_sign_in_shortcut = button("Sign in with Google for account feeds", lambda: self.oauth_request("oauth_connect"))
+            content.append(self.oauth_sign_in_shortcut)
         content.append(label("Sign in on YouTube in your browser, then connect that browser's session. "
                              "Your password stays with Google. You can close the browser afterward.", "muted", True))
         content.append(button("1. Open YouTube sign-in", lambda: Gio.AppInfo.launch_default_for_uri(
@@ -1113,6 +1181,8 @@ class MainWindow(Gtk.ApplicationWindow):
             self.rating_tasks.close()
             if self.account_window:
                 self.account_window.close()
+            if self.playback_help_window:
+                self.playback_help_window.close()
             self.thumbnails.close()
             self.controller.close()
             self.store.close()

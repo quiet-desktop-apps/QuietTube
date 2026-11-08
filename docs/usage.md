@@ -202,6 +202,30 @@ request is not presented as success.
 Check Liked videos before retrying an ambiguous network failure. No account
 ratings are changed by the automated tests or by opening a feed.
 
+## Connected OAuth but mpv closes immediately
+
+The **Personal OAuth · connected** badge describes access to account feeds, not
+permission to stream video through mpv. If YouTube asks the extractor to confirm
+that it is not a bot, the player cannot start even when refreshing the dashboard
+works. Repeating Google OAuth sign-in does not satisfy that separate check.
+
+A playback error now exposes **Playback help** beside the status message. It
+explains the connection boundary and offers an explicit retry at the saved
+position, Copy video link, or **Open this video on YouTube** in your usual browser.
+Opening the help itself makes no network requests and does not launch a browser.
+The browser link includes the saved playback time. Watching there does not advance
+QuietTube's queue or synchronize its resume position; the queue remains intact.
+
+There is no automatic browser-cookie fallback or retry loop. Waiting before a
+manual retry may help a temporary restriction, but QuietTube cannot guarantee it.
+Browser-session mode remains a separate explicit choice; reconnecting a website
+session is not a guaranteed solution either. Google sign-in for account feeds is
+also available near the top of the account dialog when OAuth is selected.
+
+The upstream [yt-dlp account documentation](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#logging-in-with-oauth)
+states that OAuth login is not supported for YouTube extraction. A Data API login
+therefore cannot be treated as a replacement for website playback authorization.
+
 ## Playback diagnostics
 
 Playback writes private structured logs to
