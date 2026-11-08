@@ -135,3 +135,28 @@ def test_like_worker_uses_disposable_session_copy(tmp_path, monkeypatch):
     assert result["liked"]
     assert source.read_text() == "synthetic session"
     assert not snapshots[0].exists()
+
+
+def test_playback_import_is_private_and_does_not_fetch_or_change_feeds(tmp_path, monkeypatch):
+    from yt_dlp.cookies import YoutubeDLCookieJar
+    source, destination = tmp_path / 'import.txt', tmp_path / 'playback.txt'
+    jar = YoutubeDLCookieJar(str(source))
+    for item in [cookie(), cookie('bank.example', 'SECRET')]:
+        jar.set_cookie(item)
+    jar.save(ignore_discard=True, ignore_expires=True)
+    def unexpected(*_):
+        pytest.fail('Playback import must not fetch account feeds')
+    monkeypatch.setattr(worker, 'fetch', unexpected)
+    result = worker.execute({'action': 'playback_connect', 'cookie_file': str(source), 'session': str(destination)})
+    assert result == {'playback_session_saved': True}
+    saved = YoutubeDLCookieJar(str(destination))
+    saved.load(ignore_discard=True, ignore_expires=True)
+    assert [(c.domain, c.name) for c in saved] == [('.youtube.com', 'SAPISID')]
+    assert destination.stat().st_mode & 0o777 == 0o600
+    assert 'FAKE_TEST_VALUE' not in str(result)
+    # An invalid replacement leaves the previous working session intact.
+    previous = destination.read_bytes()
+    source.write_text('# Netscape HTTP Cookie File\n')
+    with pytest.raises(ValueError, match='No signed-in'):
+        worker.execute({'action': 'playback_connect', 'cookie_file': str(source), 'session': str(destination)})
+    assert destination.read_bytes() == previous

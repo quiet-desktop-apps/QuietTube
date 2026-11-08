@@ -288,3 +288,36 @@ def test_real_queue_failure_preserves_items_and_play_now_recovers(clip, tmp_path
     finally:
         controller.close()
         store.close()
+
+
+def test_real_mpv_verification_failure_has_safe_typed_category(tmp_path):
+    """Real mpv hook + a synthetic extractor; never contact YouTube or a real account."""
+    import sys
+    fake = tmp_path / 'synthetic-extractor'
+    fake.write_text('#!' + sys.executable + '\nimport sys\nsys.stderr.write("ERROR: Sign in to confirm you are not a bot. https://media.invalid/?token=SECRET\\n")\nsys.exit(1)\n')
+    fake.chmod(0o700)
+    class Unavailable(BaseHTTPRequestHandler):
+        def do_GET(self): self.send_error(404)
+        def log_message(self, *args): pass
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Unavailable)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    events = []
+    log = PlaybackLog(tmp_path / 'logs')
+    player = MpvPlayer(events.append, log=log)
+    try:
+        player.start(f'ytdl://http://127.0.0.1:{server.server_port}/video', extra_args=[
+            '--vo=null', '--ao=null', '--force-window=no', f'--script-opts=ytdl_hook-ytdl_path={fake}'])
+        wait_for(lambda: any(e.kind == 'error' for e in events))
+        errors = [e for e in events if e.kind == 'error']
+        assert errors[-1].category == 'verification'
+        assert 'OAuth again will not resolve' in errors[-1].value
+        assert not any(e.kind == 'finished' for e in events)
+        assert 'SECRET' not in str(events) + log.path.read_text()
+        rows = [json.loads(line) for line in log.path.read_text().splitlines()]
+        assert any(r['event'] == 'error' and r.get('category') == 'verification' for r in rows)
+    finally:
+        player.stop()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

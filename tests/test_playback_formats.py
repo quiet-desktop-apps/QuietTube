@@ -74,3 +74,18 @@ def test_repeated_logs_retain_only_category_and_do_not_hide_specific_error():
     for _ in range(10_000):
         diagnostics.observe("Failed to open https://example.invalid/?secret=123")
     assert vars(diagnostics) == {"category": "forbidden"}
+
+
+@pytest.mark.parametrize('message', [
+    "Sign in to confirm you're not a bot. Use --cookies-from-browser.",
+    'Sign in to confirm you’re not a bot. Authentication required.',
+])
+def test_bot_challenge_is_not_mistaken_for_expired_oauth(message):
+    diagnostics = PlaybackDiagnostics()
+    assert diagnostics.observe(message + ' https://media.invalid/?token=SECRET') == 'verification'
+    diagnostics.observe('Authentication required')
+    diagnostics.observe('Requested format is not available')
+    assert diagnostics.category == 'verification'
+    assert 'OAuth again will not resolve' in diagnostics.error()
+    assert 'Reconnect your account' not in diagnostics.error()
+    assert 'SECRET' not in diagnostics.error()

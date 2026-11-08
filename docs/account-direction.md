@@ -1,6 +1,6 @@
 # Account connection: history, direction and trade-offs
 
-Status as of 8 November 2026: browser-session import remains the entry path.
+Status as of 9 November 2026: browser-session import remains the entry path.
 QuietTube implements optional personal OAuth configuration, keyring storage,
 authorization and bounded API feeds. Synthetic tests are not live account
 verification, a release or proof of Google's approval. No real OAuth client
@@ -192,3 +192,12 @@ quota consumption measured against realistic daily use, clear feature difference
 tested playback boundaries and an
 established distribution-policy position. This documentation records the direction
 and its limits; it does not claim that those criteria have been met.
+
+## Playback session trial
+
+Personal OAuth does not authorize yt-dlp/mpv extraction. An explicit separate
+**Connect playback** flow now allows a YouTube website session for mpv while
+keeping OAuth for feeds and Likes. A live trial restored video playback, but
+requires browser-derived cookies and does not remove their expiry limitations.
+See [ADR 0003](decisions/0003-separate-playback-session.md) and the
+[verification record](verification.md) for the decision and evidence.

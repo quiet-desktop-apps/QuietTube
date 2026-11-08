@@ -539,3 +539,113 @@ def test_oauth_unsupported_feed_clears_previous_cards_without_signing_out(window
     assert window.oauth_verified and window.account_available()
     assert window.controller.queue.to_dict() == before
     assert 'Watch Later is unavailable' in window.status.get_text()
+
+
+def test_playback_help_preserves_oauth_and_opens_browser_only_on_explicit_click(window, monkeypatch):
+    from quiettube.player import PlayerEvent, PlaybackDiagnostics
+    from quiettube.ui import DEMO_VIDEOS
+    from test_controller import FakePlayer
+    window.demo = False
+    window.store.set('account_mode', 'oauth')
+    window.store.set('oauth_authorized', True)
+    window.oauth_verified = True
+    window.player = window.controller.player = FakePlayer()
+    window.controller.play_now(DEMO_VIDEOS[0])
+    window.controller.event(PlayerEvent(window.player.generation, 'time-pos', 75.8))
+    before = window.controller.queue.to_dict()
+    opened = []
+    monkeypatch.setattr('quiettube.ui.Gio.AppInfo.launch_default_for_uri', lambda url, context: opened.append(url))
+    diagnostic = PlaybackDiagnostics()
+    diagnostic.observe("Sign in to confirm you're not a bot")
+    window.on_player(PlayerEvent(window.player.generation, 'error', diagnostic.error(), diagnostic.category))
+    assert window.playback_help_button.get_visible()
+    assert window.account_button.get_label() == 'Personal OAuth · connected'
+    window.playback_help_button.emit('clicked')
+    first = window.playback_help_window
+    assert first is not None and opened == []
+    window.open_playback_help()
+    assert window.playback_help_window is first
+    window.playback_browser_button.emit('clicked')
+    assert opened == [DEMO_VIDEOS[0].url + '&t=75s']
+    assert window.controller.queue.to_dict() == before
+    assert window.oauth_verified and window.account_available()
+    first.close()
+    assert window.playback_help_window is None
+    window.controller.reload()
+    assert not window.playback_help_button.get_visible()
+    assert window.player.starts[-1][1] == 75.8
+    assert window.player.starts[-1][3] is None
+
+
+def test_oauth_sign_in_is_reachable_at_top_of_account_dialog(window, monkeypatch):
+    from gi.repository import Gtk
+    window.demo = False
+    window.store.set('account_mode', 'oauth')
+    calls = []
+    monkeypatch.setattr(window.tasks, 'submit', lambda request: calls.append(request))
+    window.open_account()
+    content = window.account_window.get_child().get_child()
+    if isinstance(content, Gtk.Viewport):
+        content = content.get_child()
+    child = content.get_first_child()
+    first_controls = []
+    for _ in range(4):
+        first_controls.append(child)
+        child = child.get_next_sibling()
+    signin = first_controls[-1]
+    assert signin.get_label() == 'Sign in with Google for account feeds'
+    signin.emit('clicked')
+    assert calls[-1]['action'] == 'oauth_connect'
+    assert not signin.get_sensitive()
+    window.account_window.close()
+
+
+def test_separate_playback_setup_preserves_oauth_feed_queue_and_ignores_stale_results(window, monkeypatch):
+    from quiettube.tasks import TaskResult
+    from quiettube.ui import DEMO_VIDEOS
+    from test_controller import FakePlayer
+    window.demo = False
+    window.store.set('account_mode', 'oauth')
+    window.store.set('oauth_authorized', True)
+    window.oauth_verified = True
+    window.player = window.controller.player = FakePlayer()
+    window.controller.play_now(DEMO_VIDEOS[0])
+    window.controller.queue.current.position = 75
+    before = window.controller.queue.to_dict()
+    feed = window.feed
+    calls = []
+    monkeypatch.setattr('quiettube.playback_connection.suggested_profile', lambda *_: '')
+    window.open_playback_connection()
+    dialog = window.playback_connection_window
+    window.open_playback_connection()
+    assert window.playback_connection_window is dialog
+    monkeypatch.setattr(dialog.tasks, 'submit', lambda request: calls.append(request))
+    dialog.connect_button.emit('clicked')
+    assert calls[-1]['action'] == 'playback_connect'
+    assert calls[-1]['session'] == str(window.store.playback_cookie_path)
+    assert 'account_mode' not in calls[-1]
+    assert not dialog.actions.get_sensitive()
+    dialog.on_result(TaskResult(dialog.tasks.generation + 1, {'playback_session_saved': True}))
+    assert not window.store.get('playback_session_enabled', False)
+    dialog.on_result(TaskResult(dialog.tasks.generation, error='Synthetic import failure'))
+    assert not window.store.get('playback_session_enabled', False)
+    assert dialog.actions.get_sensitive()
+    assert window.oauth_verified
+    window.store.playback_cookie_path.write_text('synthetic session')
+    dialog.on_result(TaskResult(dialog.tasks.generation, {'playback_session_saved': True}))
+    assert window.store.get('playback_session_enabled')
+    assert window.controller.queue.to_dict() == before
+    assert window.feed == feed and window.oauth_verified
+    assert window.store.get('account_mode') == 'oauth' and window.store.get('oauth_authorized')
+    assert window.playback_connection_button.get_label() == 'Playback session · saved'
+    window.controller.play()
+    assert window.player.starts[-1][3] == window.store.playback_cookie_path
+    dialog.remove_session()
+    assert not window.store.playback_cookie_path.exists()
+    assert not window.store.get('playback_session_enabled')
+    assert window.controller.queue.to_dict() == before
+    assert window.oauth_verified and window.store.get('oauth_authorized')
+    dialog.close()
+    assert window.playback_connection_window is None
+    dialog.on_result(TaskResult(dialog.tasks.generation, {'playback_session_saved': True}))
+    assert not window.store.get('playback_session_enabled')

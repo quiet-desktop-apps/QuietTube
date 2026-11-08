@@ -4,6 +4,65 @@ Verified on 7 November 2026 on this Linux workstation. The historical playback c
 No binary packages for other distributions were produced by these checks.
 
 
+## Separate playback session trial — 9 November 2026
+
+Following the diagnostic-only change below, the maintainer explicitly requested
+trying an authenticated playback session. A separate session was imported from
+the previously selected Chromium profile, outside the source tree. A bounded live
+mpv attempt loaded the queued video and advanced playback by more than four seconds.
+The session was saved only after that success. OAuth settings, queue/history and
+ratings were not changed.
+
+A further real mpv check in isolated Xvfb decoded video and produced two different
+video-only rendered frames five seconds apart. Temporary frame files were deleted;
+no titles, URLs, cookies or screenshots were published. An earlier probe of
+`video-pts` produced no samples because that property is unavailable; it was not
+counted as evidence of a freeze or successful frame progression. The rendered-frame
+check supplied the actual video evidence.
+
+The new **Connect playback** flow retains OAuth for feeds and Likes and explicitly
+saves a separate website session for mpv. It can be removed independently. The
+worker validates/filter-saves the cookie jar without fetching account feeds; the
+UI says **saved**, not verified playback. Import failure or stale completion cannot
+enable a new session, and no automatic retry or browser launch is added.
+
+`./test.sh`: **203 passed**, **88% coverage**, including opt-in/persistence,
+account isolation, failed replacement, filtering/private permissions, stale UI
+results and removal. Automated tests use synthetic sessions only; the separately
+authorized live trial above is not part of that suite. Moving video worked in
+this trial; prolonged idle/resume, future expiry and the user's normal desktop
+rendering still need real use. Cookie-free playback has not been repaired.
+
+## Playback verification challenge — 9 November 2026
+
+The existing redacted logs showed successful playback earlier, then repeated
+`account` warnings followed by error/closure after the application was left open
+and after a restart. A separate read-only live diagnostic reproduced YouTube's
+“not a bot” challenge for a public sample and the current queued video, without
+cookies or OAuth tokens. It printed only result categories, read queue metadata
+through a read-only SQLite connection, and did not alter queue/history or ratings.
+The installed yt-dlp 2026.10.26 matched the latest stable upstream release checked.
+
+The confirmed defect was the instruction to reconnect the account: the generic
+classifier grouped verification challenges with account-session requirements,
+even in OAuth mode where a new Data API login cannot authorize mpv. Classification
+now distinguishes `verification`, carries the category in the typed player event,
+and records the final category in the private log. Raw URLs/messages remain
+excluded. Playback help exposes manual recovery options and explicitly opening
+the video in a browser at the saved time. No browser session is silently imported
+or used, no automatic retry is added, and Google sign-in is reachable at the top
+of the account dialog.
+
+These changes correct diagnosis and recovery guidance. They **do not establish
+that cookie-free playback has recovered**: the live YouTube verification challenge
+was unresolved at this stage. The subsequent authenticated trial is recorded above.
+Deterministic tests use a synthetic failing extractor with
+real mpv, plus GTK/controller checks, and never use a real account session.
+
+`./test.sh` passed all **200 tests** with **88% coverage**. A GTK screenshot
+check also verified the playback-help dialog; its height was increased to keep
+the recovery buttons visible without scrolling on the tested desktop.
+
 ## OAuth PR review corrections — 8 November 2026
 
 Review found three reproducible defects: subscription sync queued the entire
