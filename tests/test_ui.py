@@ -521,3 +521,21 @@ def test_oauth_pagination_uses_tokens_and_refresh_resets_them(window, monkeypatc
     window.reload()
     assert requests[-1]['page'] == 0 and requests[-1]['page_token'] == ''
     assert requests[-1]['refresh'] is True
+
+
+def test_oauth_unsupported_feed_clears_previous_cards_without_signing_out(window, monkeypatch):
+    from quiettube.tasks import TaskResult
+    window.demo = False
+    window.store.set('account_mode', 'oauth')
+    window.store.set('oauth_authorized', True)
+    window.oauth_verified = True
+    before = window.controller.queue.to_dict()
+    monkeypatch.setattr(window.tasks, 'submit', lambda request: None)
+    assert window.videos
+    window.load_feed('later')
+    window.on_result(TaskResult(window.tasks.generation, {'code': 'unsupported'}, 'Watch Later is unavailable through this API.'))
+    assert window.videos == [] and window.feed_videos == []
+    assert not window.has_more
+    assert window.oauth_verified and window.account_available()
+    assert window.controller.queue.to_dict() == before
+    assert 'Watch Later is unavailable' in window.status.get_text()

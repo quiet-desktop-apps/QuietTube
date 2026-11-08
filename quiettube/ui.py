@@ -580,8 +580,12 @@ class MainWindow(Gtk.ApplicationWindow):
             if operation in ACCOUNT_OPERATIONS and self.account_window:
                 self.account_message(result.error)
             if self.oauth_mode():
-                self.oauth_verified = False
-                if (result.data or {}).get("code") in {"sign_in_required", "client_not_configured"}:
+                code = (result.data or {}).get("code")
+                if code == "unsupported":
+                    self.show_empty("Unavailable with personal OAuth", result.error)
+                else:
+                    self.oauth_verified = False
+                if code in {"sign_in_required", "client_not_configured"}:
                     self.store.set("oauth_authorized", False)
                     self.show_empty("Google sign-in needed", "Open Connect YouTube → Personal OAuth to sign in again.")
                 self.refresh_transport()

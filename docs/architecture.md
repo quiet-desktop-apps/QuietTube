@@ -57,7 +57,9 @@ API tasks after 180 seconds, authorization after 330 seconds (including up to
 240 seconds for user consent). OAuth subscription snapshots cache up to 300
 metadata records for ten minutes, drawn from up to 500 subscriptions and ten
 uploads per channel, with four concurrent requests. Responses are capped at 2 MiB.
-Manual Refresh rebuilds that snapshot; failed syncs do not overwrite it.
+Manual Refresh rebuilds that snapshot; failed syncs do not overwrite it. Invalid
+cache records trigger a rebuild. Upload-list requests run in batches of at most
+four; an error stops subsequent batches instead of queuing the whole account.
 
 One mpv process runs at a time. Its demuxer buffers are capped at 64 MiB forward
 and 8 MiB backward. Decoder, renderer, GPU and process overhead are additional.

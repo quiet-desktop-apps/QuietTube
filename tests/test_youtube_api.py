@@ -189,3 +189,50 @@ def test_unauthorized_refreshes_exactly_once_without_cookie_fallback(tmp_path, m
         assert service.request('subscriptions', {}) == {'items': []}
     assert calls == ['old', 'renewed']
     assert renewals == [{}, {'rejected_token': 'old'}]
+
+
+@pytest.mark.parametrize('failure', ['quota', 'sign_in_required', 'account_error'])
+def test_subscription_failure_stops_scheduling_more_channels(tmp_path, monkeypatch, failure):
+    service = api(tmp_path)
+    queried = []
+    cache = tmp_path / 'account-feed.json'
+    cache.write_text('previous snapshot')
+    def request(resource, params, method='GET'):
+        if resource == 'subscriptions':
+            return {'items': [{'snippet': {'resourceId': {'channelId': f'channel{i}'}}} for i in range(20)]}
+        if resource == 'channels':
+            return {'items': [{'contentDetails': {'relatedPlaylists': {'uploads': f'uploads{i}'}}} for i in range(20)]}
+        assert resource == 'playlistItems'
+        queried.append(params['playlistId'])
+        raise AccountError('Synthetic failure', failure)
+    monkeypatch.setattr(service, 'request', request)
+    with pytest.raises(AccountError) as error:
+        service.fetch({'kind': 'home', 'refresh': True})
+    assert error.value.code == failure
+    assert 1 <= len(queried) <= 4  # only the current batch, never the remaining channels
+    assert cache.read_text() == 'previous snapshot'
+
+
+@pytest.mark.parametrize('payload', [
+    {'videos': []},  # missing note
+    {'videos': {}, 'note': 'invalid list'},
+    {'videos': [{'id': 'bad', 'title': 'bad id'}], 'note': 'invalid video'},
+    {'videos': [{'id': A, 'title': None}], 'note': 'invalid title'},
+    {'videos': [{'id': A, 'title': 'bad duration', 'duration': 'NaN'}], 'note': 'invalid duration'},
+])
+def test_malformed_fresh_snapshot_is_rebuilt(tmp_path, monkeypatch, payload):
+    import json
+    import time
+    service = api(tmp_path)
+    path = tmp_path / 'account-feed.json'
+    path.write_text(json.dumps({'created': time.time(), **payload}))
+    calls = []
+    def request(resource, *args):
+        calls.append(resource)
+        assert resource == 'subscriptions'
+        return {'items': []}
+    monkeypatch.setattr(service, 'request', request)
+    result = service.fetch({'kind': 'home'})
+    assert calls == ['subscriptions']
+    assert result['videos'] == [] and not result['has_more']
+    assert 'Newest uploads' in result['note']

@@ -67,7 +67,7 @@ restart. See the [full user guide](docs/usage.md) for controls and troubleshooti
 
 ## Account connection and limits
 
-**Browser-session import remains the default. This branch also implements optional
+**Browser-session import remains the default. QuietTube also implements optional
 personal OAuth as an experiment; live Google sign-in and daily reliability are not
 yet verified.** Open **Connect YouTube → Personal OAuth · experimental** for the
 setup instructions, JSON import and manual fields. See the

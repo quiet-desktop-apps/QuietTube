@@ -131,6 +131,7 @@ upload lists + up to 6 metadata batches), excluding initial sign-in/renewal. Thi
 is a request-count estimate, not a measured daily quota budget. Search and other
 methods may use different quota buckets/costs. Repeated Refresh can exhaust even
 a personal allocation; QuietTube does not poll in the background. A quota error
+stops new subscription batches (up to four requests may already be in flight),
 preserves the queue and does not switch connection methods.
 
 ## Troubleshooting

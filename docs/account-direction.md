@@ -1,7 +1,7 @@
 # Account connection: history, direction and trade-offs
 
 Status as of 8 November 2026: browser-session import remains the entry path.
-This branch implements optional personal OAuth configuration, keyring storage,
+QuietTube implements optional personal OAuth configuration, keyring storage,
 authorization and bounded API feeds. Synthetic tests are not live account
 verification, a release or proof of Google's approval. No real OAuth client
 configuration is bundled. See the [setup guide](personal-oauth-setup.md).

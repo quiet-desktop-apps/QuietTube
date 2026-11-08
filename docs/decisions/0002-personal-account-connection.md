@@ -3,7 +3,7 @@
 Date: 8 November 2026. Human owner: Paulo Aboim Pinto.
 
 Status: accepted for an experimental implementation at the human owner’s request.
-Configuration, keyring storage and API routing are implemented in this branch;
+Configuration, keyring storage and API routing are implemented;
 live verification and service-policy suitability remain incomplete. ADR 0001's
 native UI and resource bounds remain in force.
 

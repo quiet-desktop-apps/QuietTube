@@ -4,6 +4,21 @@ Verified on 7 November 2026 on this Linux workstation. The historical playback c
 No binary packages for other distributions were produced by these checks.
 
 
+## OAuth PR review corrections — 8 November 2026
+
+Review found three reproducible defects: subscription sync queued the entire
+account before observing quota/auth failures, malformed fresh cache records could
+be repeatedly returned, and unsupported Watch Later kept the previous feed's
+cards under its new heading while downgrading the connected status.
+
+Nine new regression cases failed before the fixes and passed afterward. Upload-list
+requests now run in batches of at most four and stop scheduling on error; the old
+snapshot is retained. Cache records are validated before reuse and rebuilt when
+invalid. Unsupported feeds show an empty explanatory state while preserving account
+status and the playback queue. The complete local `./test.sh` run passed **194
+tests**, no skips/failures, with **88% statement coverage**. The existing GTK/Python
+deprecation warnings remain. No real account requests or ratings were performed.
+
 ## Personal Desktop OAuth experiment — 8 November 2026
 
 `./test.sh`: **185 passed**, no failed or skipped tests, **88% overall statement

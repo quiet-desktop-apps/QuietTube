@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 import requests
 
 from .account import Account, AccountError, CACHE_FILE
-from .models import Video, playlist_url, publication_sort_key, video_id
+from .models import Video, finite_seconds, playlist_url, publication_sort_key, video_id
 from .storage import atomic_private_write
 
 API_ROOT = "https://www.googleapis.com/youtube/v3/"
@@ -22,6 +22,7 @@ UPLOADS_PER_CHANNEL = 10
 MAX_FEED = PAGE_SIZE * MAX_PAGES
 CACHE_SECONDS = 600
 MAX_RESPONSE = 2 * 1024 * 1024
+FEED_WORKERS = 4
 
 
 def api_request(token, resource, params, method="GET"):
@@ -115,7 +116,16 @@ class YouTubeAPI:
             if path.stat().st_size <= MAX_RESPONSE:
                 cached = json.loads(path.read_text())
                 if (not refresh and 0 <= time.time() - cached["created"] < CACHE_SECONDS
-                        and len(cached["videos"]) <= MAX_FEED):
+                        and isinstance(cached["videos"], list) and len(cached["videos"]) <= MAX_FEED
+                        and isinstance(cached["note"], str) and len(cached["note"]) <= 1000):
+                    # A readable JSON file can still have invalid records. Rebuild
+                    # instead of replaying the same broken page until cache expiry.
+                    for item in cached["videos"]:
+                        video = Video(**item)
+                        if (not all(isinstance(value, str) and len(value) <= limit for value, limit in
+                                    ((video.title, 500), (video.channel, 200), (video.published, 30)))
+                                or finite_seconds(video.duration) != video.duration):
+                            raise ValueError("Invalid cached video")
                     snapshot = cached
         except (OSError, ValueError, KeyError, TypeError):
             pass
@@ -150,16 +160,19 @@ class YouTubeAPI:
                     raise  # quota/network/auth errors must not masquerade as an empty feed
 
             uploads, skipped = {}, 0
-            with ThreadPoolExecutor(max_workers=4) as pool:
-                for items, unavailable in pool.map(recent, playlists):
-                    skipped += unavailable
-                    for item in items:
-                        detail = item.get("contentDetails", {})
-                        try:
-                            ident = video_id(detail.get("videoId", ""))
-                        except (ValueError, AttributeError):
-                            continue
-                        uploads[ident] = detail.get("videoPublishedAt", "")
+            with ThreadPoolExecutor(max_workers=FEED_WORKERS) as pool:
+                # Do not submit the entire account up front: a quota/auth failure
+                # must stop new batches, with at most this batch still in flight.
+                for start in range(0, len(playlists), FEED_WORKERS):
+                    for items, unavailable in pool.map(recent, playlists[start:start + FEED_WORKERS]):
+                        skipped += unavailable
+                        for item in items:
+                            detail = item.get("contentDetails", {})
+                            try:
+                                ident = video_id(detail.get("videoId", ""))
+                            except (ValueError, AttributeError):
+                                continue
+                            uploads[ident] = detail.get("videoPublishedAt", "")
             ids = sorted(uploads, key=lambda ident: uploads[ident], reverse=True)[:MAX_FEED]
             videos = sorted(self.details(ids), key=publication_sort_key, reverse=True)
             note = (f"Newest uploads from {len(playlists)} subscriptions · up to {UPLOADS_PER_CHANNEL} recent uploads per channel, "
