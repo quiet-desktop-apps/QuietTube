@@ -4,6 +4,32 @@ Verified on 7 November 2026 on this Linux workstation. The historical playback c
 No binary packages for other distributions were produced by these checks.
 
 
+## Watch history and resume sharing — 9 November 2026
+
+The maintainer explicitly authorized sharing history and the current playback
+position. A bounded live request used a disposable copy of the connected website
+session and the current video's actual saved position. The two YouTube statistics
+requests succeeded. A subsequent signed-in history read-back found the same video
+with a 52% progress bar and a resume endpoint at 1,286 seconds, matching the sent
+1,286.533-second position to YouTube's whole-second precision. No other videos,
+ratings, queue entries or OAuth settings were changed. Session material, URLs,
+titles and response pages were not published or retained as test fixtures.
+
+The first history parser looked only for legacy videoRenderer cards and missed
+the entry. Inspecting modern lockupViewModel progress and watch-endpoint fields
+confirmed it. HTTP status alone was not counted as a successful resume check.
+Actual reopening on a separate physical device remains for the maintainer to try.
+
+Final `./test.sh` run: **227 passed**, **89% coverage**. A synthetic GTK preview
+confirmed the sharing control and explanatory text fit the connection dialog.
+
+The implementation reports actual positions periodically and on pause/stop,
+retains a local opt-in setting, and uses a bounded independent worker. The default
+for other installations is off. Automated tests use synthetic sessions only and
+cover no invented full watch, seeks/pause/loading failures, coalescing, opt-out,
+account isolation, stale results, queue transitions, endpoint restrictions and
+safe error handling. Live account writes are not part of the test suite.
+
 ## Separate playback session trial — 9 November 2026
 
 Following the diagnostic-only change below, the maintainer explicitly requested
