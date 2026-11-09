@@ -6,14 +6,14 @@ from .tasks import ExtractorTasks
 
 
 class PlaybackConnectionWindow(Gtk.Window):
-    def __init__(self, parent, store, updated):
+    def __init__(self, parent, store, updated, sharing_changed=lambda enabled: None):
         super().__init__(title="Connect playback", transient_for=parent, modal=True)
         from .ui import box, button, label
         self.store, self.updated = store, updated
         self.closed = False
         self.source = {}
         self.tasks = ExtractorTasks(lambda result: GLib.idle_add(self.on_result, result))
-        self.set_default_size(580, 660)
+        self.set_default_size(620, 810)
         self.connect("close-request", self.on_close)
         content = box(spacing=14)
         for setter in (content.set_margin_start, content.set_margin_end, content.set_margin_top, content.set_margin_bottom):
@@ -23,8 +23,8 @@ class PlaybackConnectionWindow(Gtk.Window):
         scroll.set_child(content)
         self.set_child(scroll)
         content.append(label("Connect YouTube for mpv playback", "subheading", True))
-        content.append(label("Keep personal OAuth for your dashboard and Likes. This separate session is used only "
-                             "for playback while personal OAuth is selected. In browser-session account mode, "
+        content.append(label("Keep personal OAuth for your dashboard and Likes. This separate session is used "
+                             "for playback and optional history sharing while personal OAuth is selected. In browser-session account mode, "
                              "playback continues using that account's session.", "muted", True))
         content.append(label("1. Sign into YouTube in your browser.\n2. Select that browser below and save its session.\n"
                              "3. Close the browser, return to QuietTube and press Play.", "small", True))
@@ -56,6 +56,14 @@ class PlaybackConnectionWindow(Gtk.Window):
         self.progress = label("Session saved. Press Play to test it." if store.get("playback_session_enabled", False)
                               and store.playback_cookie_path.exists() else "No separate playback session saved.", "small", True)
         content.append(self.progress)
+        self.share_history = Gtk.CheckButton(label="Share watch history and playback position with YouTube")
+        self.share_history.set_active(bool(store.get("share_watch_history", False)))
+        self.share_history.connect("toggled", lambda check: sharing_changed(check.get_active()))
+        content.append(self.share_history)
+        content.append(label("Uses the YouTube account in this website session. Sends the actual position every 30 seconds "
+                             "while watching and on pause/stop. YouTube history must be enabled. Another device signed into "
+                             "the same account may then resume there; updates can take time. This does not pull progress "
+                             "from other devices back into QuietTube.", "small", True))
         content.append(button("Close", self.close))
 
     def open_sign_in(self):

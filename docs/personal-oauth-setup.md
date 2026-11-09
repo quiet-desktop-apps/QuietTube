@@ -114,8 +114,9 @@ Experimental: live account reliability and daily quota usage are not yet verifie
 | Navigation | Reuses the snapshot for ten minutes; manual Refresh rebuilds it |
 | Search / playlists / Liked videos | Data API requests; up to ten pages, with pagination tokens |
 | Like | Explicit API request after clicking the thumb-up control; no background ratings |
-| Watch Later / YouTube watch history | Not synchronized; use local queue and completion history |
-| Playback | Public yt-dlp/mpv access; OAuth tokens and saved browser cookies are not passed to the player in this mode |
+| Watch Later | Not available through OAuth; use the local queue |
+| YouTube watch history / resume | Optional website-session sharing under Connect playback; separate from OAuth |
+| Playback | yt-dlp/mpv; an explicitly connected separate playback session may be used. OAuth tokens and old browser-account cookies are not passed to mpv |
 
 Quota belongs to the **project**, not each user, client ID or device. Separate
 client IDs under your project still share its limits. See the [quota explanation

@@ -8,6 +8,7 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango
 
 from .controller import PlaybackController
+from .history_sync import HistorySync
 from .browsers import suggested_profile
 from .models import Video, duration_label, finite_seconds, playlist_url, published_label, publication_sort_key, video_id
 from .player import MpvPlayer
@@ -87,7 +88,8 @@ class MainWindow(Gtk.ApplicationWindow):
         self.store = Store(directory)
         self.playback_log = PlaybackLog(self.store.directory / "logs")
         self.player = MpvPlayer(lambda event: GLib.idle_add(self.on_player, event), log=self.playback_log)
-        self.controller = PlaybackController(self.store, self.player, self.refresh_transport)
+        self.history_sync = HistorySync(self.store, GLib.idle_add, self.history_status_changed)
+        self.controller = PlaybackController(self.store, self.player, self.refresh_transport, self.history_sync.observe)
         self.tasks = ExtractorTasks(lambda result: GLib.idle_add(self.on_result, result))
         self.rating_tasks = ExtractorTasks(lambda result: GLib.idle_add(self.on_like_result, result))
         self.like_pending = None
@@ -269,6 +271,10 @@ class MainWindow(Gtk.ApplicationWindow):
         now.append(self.now_title)
         self.now_detail = label("Playback opens in a lightweight mpv window.", "muted small")
         now.append(self.now_detail)
+        self.history_status = label("History sharing on" if self.store.get("share_watch_history", False) else "History sharing off", "muted small")
+        self.history_status.set_ellipsize(Pango.EllipsizeMode.END)
+        self.history_status.set_max_width_chars(55)
+        now.append(self.history_status)
         transport.append(now)
         transport.append(button("−10s", lambda: self.player.command(["seek", -10, "relative"])))
         self.play_button = button("Play", self.play, "suggested-action")
@@ -292,6 +298,17 @@ class MainWindow(Gtk.ApplicationWindow):
         self.volume.connect("value-changed", self.volume_changed)
         transport.append(self.volume)
         root.append(transport)
+
+    def history_status_changed(self, text):
+        if not self.closed:
+            self.history_status.set_text(text)
+
+    def history_sharing_changed(self, enabled):
+        self.history_sync.reset()
+        self.store.set("share_watch_history", enabled)
+        self.history_status_changed("History sharing on" if enabled else "History sharing off")
+        if enabled:
+            self.controller.observation("share")
 
     def set_status(self, text, error=False):
         self.status.set_text(text)
@@ -616,6 +633,7 @@ class MainWindow(Gtk.ApplicationWindow):
             self.refresh_transport()
             return False
         if operation == "oauth_forget":
+            self.history_sync.reset()
             self.store.set("oauth_configured", False)
             self.store.set("oauth_authorized", False)
             self.oauth_verified = False
@@ -627,6 +645,7 @@ class MainWindow(Gtk.ApplicationWindow):
             self.refresh_transport()
             return False
         if operation == "oauth_connect":
+            self.history_sync.reset()
             self.controller.stop()
             self.store.set("account_mode", "oauth")
             self.store.set("oauth_authorized", True)
@@ -639,6 +658,7 @@ class MainWindow(Gtk.ApplicationWindow):
             self.load_feed("home")
             return False
         if operation == "connect":
+            self.history_sync.reset()
             self.controller.stop()
             self.store.set("account_mode", "browser")
             self.oauth_verified = False
@@ -919,13 +939,14 @@ class MainWindow(Gtk.ApplicationWindow):
             return
         from .playback_connection import PlaybackConnectionWindow
         def updated():
+            self.history_sync.reset()
             if self.oauth_mode():
                 self.controller.stop()
             self.refresh_transport()
             self.set_status("Playback connection updated. Press Play to retry at the saved position; account feeds are unchanged.")
         def closed(*_):
             self.playback_connection_window = None
-        self.playback_connection_window = PlaybackConnectionWindow(self, self.store, updated)
+        self.playback_connection_window = PlaybackConnectionWindow(self, self.store, updated, self.history_sharing_changed)
         self.playback_connection_window.connect("close-request", closed)
         self.playback_connection_window.present()
 
@@ -1174,6 +1195,7 @@ class MainWindow(Gtk.ApplicationWindow):
         chooser.show()
 
     def disconnect(self):
+        self.history_sync.reset()
         self.tasks.cancel()
         self.rating_tasks.cancel()
         self.like_pending = None
@@ -1214,6 +1236,7 @@ class MainWindow(Gtk.ApplicationWindow):
                 self.playback_connection_window.close()
             self.thumbnails.close()
             self.controller.close()
+            self.history_sync.close()
             self.store.close()
         return False
 

@@ -649,3 +649,40 @@ def test_separate_playback_setup_preserves_oauth_feed_queue_and_ignores_stale_re
     assert window.playback_connection_window is None
     dialog.on_result(TaskResult(dialog.tasks.generation, {'playback_session_saved': True}))
     assert not window.store.get('playback_session_enabled')
+
+
+def test_history_sharing_toggle_sends_current_position_and_can_disable(window, monkeypatch):
+    from quiettube.ui import DEMO_VIDEOS
+    from quiettube.tasks import TaskResult
+    from test_controller import FakePlayer
+    window.demo = False
+    window.player = window.controller.player = FakePlayer()
+    window.store.set('account_mode', 'oauth')
+    window.store.set('oauth_authorized', True)
+    window.store.set('playback_session_enabled', True)
+    window.store.playback_cookie_path.write_text('synthetic')
+    window.oauth_verified = True
+    window.controller.play_now(DEMO_VIDEOS[0])
+    window.controller.queue.current.position = 75
+    before = window.controller.queue.to_dict()
+    calls = []
+    monkeypatch.setattr(window.history_sync.tasks, 'submit', lambda request: calls.append(request))
+    monkeypatch.setattr('quiettube.playback_connection.suggested_profile', lambda *_: '')
+    window.open_playback_connection()
+    dialog = window.playback_connection_window
+    assert not dialog.share_history.get_active()
+    dialog.share_history.set_active(True)
+    assert window.store.get('share_watch_history') is True
+    assert calls[-1]['action'] == 'history_sync' and calls[-1]['position'] == 75
+    assert calls[-1]['session'] == str(window.store.playback_cookie_path)
+    assert window.controller.queue.to_dict() == before
+    assert window.oauth_verified and window.store.get('oauth_authorized')
+    window.history_sync.on_result(TaskResult(window.history_sync.tasks.generation,
+        {'history_sent':True, 'video_id': DEMO_VIDEOS[0].id, 'position':75}))
+    assert 'History update sent' in window.history_status.get_text()
+    dialog.share_history.set_active(False)
+    assert window.store.get('share_watch_history') is False
+    assert window.history_status.get_text() == 'History sharing off'
+    assert window.store.playback_cookie_path.exists()
+    assert window.controller.queue.to_dict() == before
+    dialog.close()
