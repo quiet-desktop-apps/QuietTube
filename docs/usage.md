@@ -377,3 +377,18 @@ owns the bounded thumbnail cache; `ui.py` is the native interface.
 To update yt-dlp, change the exact pin in `requirements.txt` and `pyproject.toml`,
 run `./setup.sh`, then repeat tests and public playback checks. No silent
 self-updater or custom remote JavaScript downloads are enabled.
+
+### Recovering a failed queue item
+
+If one item opens mpv and immediately fails while other videos play, use
+**Skip failed video** beside the error to continue with the next queued item.
+The failed item is not requeued or marked fully watched. Pressing Play/Play queue
+in the error state opens **Playback recovery**, with explicit actions to retry
+at the saved position, start from the beginning/live edge, or skip the item.
+These actions do not require signing into Google again.
+
+Recently ended live streams can expose very large fragment metadata and media
+segments that mpv cannot open. QuietTube strips unselected format metadata after
+quality selection to avoid mpv's oversized-JSON failure, while retaining the
+selected audio/video fragments. This does not guarantee those media segments
+are available; skipping remains an explicit user choice.

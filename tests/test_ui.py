@@ -687,3 +687,55 @@ def test_history_sharing_toggle_sends_current_position_and_can_disable(window, m
     assert window.store.playback_cookie_path.exists()
     assert window.controller.queue.to_dict() == before
     dialog.close()
+
+
+def test_failed_queue_offers_recovery_and_skip_does_not_requeue(window):
+    from quiettube.player import PlayerEvent
+    from quiettube.ui import DEMO_VIDEOS
+    from test_controller import FakePlayer
+    window.demo = False
+    window.player = window.controller.player = FakePlayer()
+    window.controller.queue.current = None
+    window.controller.queue.upcoming.clear()
+    window.controller.add(DEMO_VIDEOS[0])
+    window.controller.add(DEMO_VIDEOS[1])
+    window.play()
+    window.on_player(PlayerEvent(window.player.generation, 'time-pos', 6569))
+    window.on_player(PlayerEvent(window.player.generation, 'error', 'Item unavailable'))
+    starts = len(window.player.starts)
+    assert window.skip_failed_button.get_visible()
+    window.queue_play_button.emit('clicked')
+    assert window.playback_help_window is not None
+    assert len(window.player.starts) == starts  # no repeated failing launch
+    window.skip_help_button.emit('clicked')
+    assert window.playback_help_window is None
+    assert window.controller.queue.current.video == DEMO_VIDEOS[1]
+    assert not window.controller.queue.upcoming
+    assert window.player.starts[-1][1] == 0
+    assert not window.store.completed_ids()
+    assert not window.skip_failed_button.get_visible()
+
+
+def test_recovery_restart_and_stale_dialog_cannot_change_other_item(window):
+    from quiettube.player import PlayerEvent
+    from quiettube.ui import DEMO_VIDEOS
+    from test_controller import FakePlayer
+    window.demo = False
+    window.player = window.controller.player = FakePlayer()
+    window.controller.queue.upcoming.clear()
+    window.controller.play_now(DEMO_VIDEOS[0])
+    window.on_player(PlayerEvent(window.player.generation, 'time-pos', 75))
+    window.on_player(PlayerEvent(window.player.generation, 'error', 'Resume failed'))
+    window.play()
+    window.restart_failed_button.emit('clicked')
+    assert window.player.starts[-1][1] == 0
+    window.on_player(PlayerEvent(window.player.generation, 'error', 'Unavailable'))
+    window.play()
+    stale = window.restart_failed_button
+    window.controller.play_now(DEMO_VIDEOS[1])
+    window.on_player(PlayerEvent(window.player.generation, 'time-pos', 30))
+    before = window.controller.queue.to_dict()
+    starts = len(window.player.starts)
+    stale.emit('clicked')
+    assert window.controller.queue.to_dict() == before
+    assert len(window.player.starts) == starts

@@ -61,6 +61,13 @@ class PlaybackController:
         if self.queue.current:
             self._start()
 
+    def restart_current(self):
+        """Explicitly discard the resume point without requeueing the failed item."""
+        if self.queue.current:
+            self.observation("boundary")
+            self.queue.current.position = 0
+            self._start()
+
     def play(self):
         if self.state in {"playing", "paused"}:
             self.player.command(["cycle", "pause"])
