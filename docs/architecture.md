@@ -41,9 +41,12 @@ flowchart LR
 | `diagnostics.py` | Private bounded playback logs with allowlisted fields |
 
 GTK receives typed `TaskResult` and `PlayerEvent` messages on its main loop.
-Generation checks ignore stale results from cancelled work. Only end-of-file
-completion advances the queue; errors and closing the player preserve the current
-item. Worker termination and player lifecycle completion are explicit, not inferred
+Generation checks ignore stale results from cancelled work. End-of-file or an
+explicit mpv `end-file: quit` advances the queue and marks the item locally done.
+The latter is emitted as `dismissed`, separate from unexpected `closed` connection
+loss. Errors, crashes, Pause, application Stop/reload and application shutdown
+preserve the current item. App-owned player stops invalidate the generation
+before terminating mpv, so their shutdown events cannot dismiss another item. Worker termination and player lifecycle completion are explicit, not inferred
 from elapsed silence. An independent Like worker is not cancelled by browsing.
 
 ## Resource lifetime and bounds

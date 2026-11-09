@@ -127,7 +127,7 @@ def test_stopping_player_does_not_emit_completion(clip):
     player.start(str(clip), extra_args=["--vo=null", "--ao=null", "--force-window=no", "--pause=yes"])
     wait_for(lambda: any(event.kind == "loaded" for event in events))
     player.stop()
-    assert not any(event.kind == "finished" for event in events)
+    assert not any(event.kind in {"finished", "dismissed"} for event in events)
 
 
 def test_player_has_explicit_buffer_bounds_and_safe_arguments():
@@ -321,3 +321,63 @@ def test_real_mpv_verification_failure_has_safe_typed_category(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+@pytest.mark.parametrize("command", [["quit"], ["keypress", "CLOSE_WIN"]])
+def test_real_mpv_quit_emits_dismissal_not_disconnect_or_eof(clip, tmp_path, command):
+    events = []
+    log = PlaybackLog(tmp_path/'logs')
+    player = MpvPlayer(events.append, log=log)
+    try:
+        player.start(str(clip), extra_args=['--vo=null', '--ao=null', '--force-window=no', '--pause=yes'])
+        wait_for(lambda: any(e.kind == 'loaded' for e in events))
+        assert player.command(command)
+        wait_for(lambda: any(e.kind == 'dismissed' for e in events))
+        wait_for(lambda: player.process.poll() is not None)
+        assert [e.kind for e in events if e.kind in {'dismissed','finished','closed','error'}] == ['dismissed']
+        assert any(json.loads(line)['event'] == 'dismissed' for line in log.path.read_text().splitlines())
+    finally:
+        player.stop()
+
+
+def test_real_mpv_crash_keeps_current_queue_item(clip, tmp_path):
+    store, player, controller, seen, pump = queued_player(tmp_path, clip)
+    try:
+        controller.add(Video('11111111111', 'Local interrupted video'))
+        controller.add(Video('22222222222', 'Next local video'))
+        controller.play()
+        pump(lambda: controller.state == 'playing')
+        player.command(['set_property', 'pause', True])
+        pump(lambda: controller.state == 'paused')
+        key = controller.queue.current.key
+        player.process.kill()
+        pump(lambda: controller.state == 'stopped')
+        assert controller.queue.current.key == key
+        assert len(controller.queue.upcoming) == 1
+        assert not store.completed_ids()
+        assert not any(e.kind == 'dismissed' for e in seen)
+    finally:
+        controller.close(); store.close()
+
+
+def test_real_mpv_close_advances_to_next_video_without_returning(clip, tmp_path):
+    store, player, controller, seen, pump = queued_player(tmp_path, clip)
+    try:
+        controller.add(Video('11111111111', 'Synthetic live item', duration=0))
+        controller.add(Video('22222222222', 'Next local video'))
+        controller.play()
+        pump(lambda: controller.state == 'playing')
+        player.command(['set_property', 'pause', True])
+        pump(lambda: controller.state == 'paused')
+        first_generation = player.generation
+        assert player.command(['quit'])
+        pump(lambda: controller.queue.current is not None and controller.queue.current.video.id == '22222222222'
+             and controller.state == 'playing')
+        assert '11111111111' in store.completed_ids()
+        pump(lambda: controller.queue.current is None)
+        assert sum(e.kind == 'dismissed' for e in seen) == 1
+        assert sum(e.kind == 'finished' for e in seen) == 1
+        assert len({e.generation for e in seen if e.kind == 'loaded'}) == 2
+        assert player.generation != first_generation
+    finally:
+        controller.close(); store.close()

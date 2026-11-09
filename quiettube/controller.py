@@ -6,7 +6,7 @@ from .history_sync import PlaybackObservation
 
 
 class PlaybackController:
-    """Owns queue transitions. Only an explicit EOF event automatically advances."""
+    """Owns queue transitions. EOF or explicit player dismissal advances; faults preserve the item."""
 
     def __init__(self, store, player, changed=lambda: None, observe=lambda event: None):
         self.store = store
@@ -116,7 +116,7 @@ class PlaybackController:
             self.state = "paused" if event.value else "playing"
             self.save()
             self.observation("pause" if event.value else "resume")
-        elif event.kind == "finished":
+        elif event.kind in {"finished", "dismissed"}:
             self.next(completed=True)
             return
         elif event.kind == "error":

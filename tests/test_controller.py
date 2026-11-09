@@ -30,7 +30,7 @@ def build(tmp_path):
     return store, player, controller
 
 
-def test_only_eof_automatically_advances_and_marks_completed(tmp_path):
+def test_eof_advances_and_marks_completed(tmp_path):
     store, player, controller = build(tmp_path)
     controller.event(PlayerEvent(player.generation, "loaded"))
     controller.event(PlayerEvent(player.generation, "time-pos", 120))
@@ -57,7 +57,7 @@ def test_error_retains_current_position_and_next_items(tmp_path):
     store.close()
 
 
-def test_window_close_keeps_queue_and_stale_eof_cannot_skip(tmp_path):
+def test_unexpected_disconnect_keeps_queue_and_stale_eof_cannot_skip(tmp_path):
     store, player, controller = build(tmp_path)
     old_generation = player.generation
     controller.event(PlayerEvent(old_generation, "closed"))
@@ -207,3 +207,62 @@ def test_history_observations_flush_old_video_before_queue_transition(tmp_path):
     controller.event(PlayerEvent(player.generation - 1, 'time-pos', 900))
     assert len(events) == count
     controller.close(); store.close()
+
+
+def test_explicit_close_finishes_live_item_once_and_persists_next(tmp_path):
+    from quiettube.models import Video
+    store, player, controller = build(tmp_path)
+    live = Video('livestream1', 'Synthetic live stream', duration=0)
+    controller.queue.current.video = live
+    controller.event(PlayerEvent(player.generation, 'loaded'))
+    controller.event(PlayerEvent(player.generation, 'time-pos', 42))
+    generation = player.generation
+    controller.event(PlayerEvent(generation, 'dismissed'))
+    assert controller.queue.current.video == video(2)
+    assert store.load_queue().current.video == video(2)
+    assert live.id in store.completed_ids()
+    assert store.db.execute('SELECT position FROM history WHERE video_id=?', (live.id,)).fetchone() == (42,)
+    assert len(player.starts) == 2
+    for kind in ('dismissed', 'closed', 'finished', 'error'):
+        controller.event(PlayerEvent(generation, kind))
+    assert controller.queue.current.video == video(2) and len(player.starts) == 2
+    controller.close(); store.close()
+    store = Store(tmp_path)
+    controller = PlaybackController(store, player)
+    controller.play()
+    assert controller.queue.current.video == video(2)
+    assert live.id in store.completed_ids()
+    controller.close(); store.close()
+
+
+def test_close_last_item_finishes_without_reopening_and_reports_actual_position(tmp_path):
+    store, player, controller = build(tmp_path)
+    controller.queue.upcoming.clear()
+    observations = []
+    controller.observe = observations.append
+    controller.event(PlayerEvent(player.generation, 'loaded'))
+    controller.event(PlayerEvent(player.generation, 'time-pos', 12))
+    controller.event(PlayerEvent(player.generation, 'dismissed'))
+    assert controller.queue.current is None and controller.state == 'stopped'
+    assert store.load_queue().current is None
+    assert video(1).id in store.completed_ids()
+    assert observations[-1].kind == 'boundary' and observations[-1].position == 12
+    controller.play()
+    assert len(player.starts) == 1
+    controller.close(); store.close()
+
+
+def test_pause_stop_reload_and_app_shutdown_never_finish_current(tmp_path):
+    store, player, controller = build(tmp_path)
+    controller.event(PlayerEvent(player.generation, 'loaded'))
+    controller.event(PlayerEvent(player.generation, 'time-pos', 60))
+    controller.event(PlayerEvent(player.generation, 'pause', True))
+    before = controller.queue.to_dict()
+    controller.stop()
+    assert store.load_queue().to_dict() == before
+    controller.reload()
+    assert player.starts[-1][1] == 60
+    controller.close()
+    assert store.load_queue().to_dict() == before
+    assert not store.completed_ids()
+    store.close()
