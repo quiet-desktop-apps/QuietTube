@@ -149,6 +149,12 @@ The feed descriptions below refer to browser-session mode unless stated otherwis
   another video at that position.
 - Select a queue row and use **↑ / ↓**, **Move to**, or **Remove** to edit it.
 - **Play queue:** starts the first item or resumes the current one.
+- **Close the mpv video window (or press q):** mark this item done locally and
+  immediately play the next queued item. This also works for live streams; no
+  end-of-stream event is needed. An empty queue stays stopped.
+- **Pause:** keep the current video and position to resume later.
+- **Stop in QuietTube / close the QuietTube app:** retain the item and position
+  for later; these are different from closing the mpv video window.
 - **Next:** skips the current video. Playback errors preserve the current item;
   they never silently skip the queue.
 - **Find similar videos:** searches by the video's title. These are topic search
@@ -187,6 +193,11 @@ If audio continues but the picture freezes, use **Reload video** (the circular
 arrow beside the quality selector). It opens fresh streams at the current saved
 position without moving or duplicating queue entries. Choosing **Play now** for
 the current video also retains its position. Pause saves the position immediately.
+Closing mpv means done watching and advances the queue; use Pause or QuietTube
+Stop when you intend to return to this video. A player crash or control-connection
+loss preserves the item. Only an explicit mpv quit event is treated as dismissal.
+Marking an item done locally does not claim its full duration was watched on
+YouTube: optional history sharing still sends only the actual playback position.
 The resolution selector is a maximum and applies to the next playback start;
 720p is the default. Some restricted, DRM, paid, regional or bot-challenged content
 may not play. The queue is local and does not modify YouTube playlists. Optional

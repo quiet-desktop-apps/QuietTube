@@ -250,6 +250,7 @@ class MainWindow(Gtk.ApplicationWindow):
         position_row.append(button("Move", self.move_to_position))
         queue_panel.append(position_row)
         queue_panel.append(button("Play queue", self.play, "suggested-action"))
+        queue_panel.append(label("Close video: done & next. Pause to resume later.", "muted small", True))
         queue_panel.append(label("Only the current video is buffered.", "muted small"))
 
         self.status = label("Ready", "status", True)
@@ -281,7 +282,9 @@ class MainWindow(Gtk.ApplicationWindow):
         transport.append(self.play_button)
         transport.append(button("+10s", lambda: self.player.command(["seek", 10, "relative"])))
         transport.append(button("Next", self.skip))
-        transport.append(button("Stop", self.controller.stop))
+        stop_button = button("Stop", self.controller.stop)
+        stop_button.set_tooltip_text("Stop and keep this video for later. Closing the mpv window finishes it and plays the next.")
+        transport.append(stop_button)
         self.quality = Gtk.DropDown.new_from_strings(["480p", "720p", "1080p", "1440p", "2160p"])
         self.quality.set_selected([480, 720, 1080, 1440, 2160].index(self.controller.height))
         self.quality.set_tooltip_text("Maximum quality for the next video")
@@ -873,7 +876,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def on_player(self, event):
         if not self.closed:
-            completed = (event.kind == "finished" and event.generation == self.player.generation
+            completed = (event.kind in {"finished", "dismissed"} and event.generation == self.player.generation
                          and self.controller.queue.current is not None)
             self.controller.event(event)
             if completed:
