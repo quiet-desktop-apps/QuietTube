@@ -19,7 +19,7 @@ class PlaybackLog:
                "pause_seconds", "exit_code"}
     FLAGS = {"pause", "seeking", "paused-for-cache"}
     ENUMS = {
-        "category": {"unknown", "forbidden", "limited", "account", "verification", "network", "format", "decode"},
+        "category": {"unknown", "forbidden", "limited", "account", "verification", "network", "format", "stream", "metadata", "decode"},
         "video-codec": {"vp9", "h264", "av1", "hevc", "other"},
         "hwdec-current": {"no", "vaapi", "vaapi-copy", "vulkan", "vulkan-copy", "nvdec", "nvdec-copy", "other"},
         "current-vo": {"gpu", "gpu-next", "x11", "null", "other"},

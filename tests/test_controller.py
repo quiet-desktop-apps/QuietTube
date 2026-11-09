@@ -266,3 +266,22 @@ def test_pause_stop_reload_and_app_shutdown_never_finish_current(tmp_path):
     assert store.load_queue().to_dict() == before
     assert not store.completed_ids()
     store.close()
+
+
+def test_explicit_restart_discards_only_current_resume_point(tmp_path):
+    store, player, controller = build(tmp_path)
+    controller.event(PlayerEvent(player.generation, 'time-pos', 6569))
+    controller.event(PlayerEvent(player.generation, 'error', 'Unavailable'))
+    old_generation = player.generation
+    key = controller.queue.current.key
+    upcoming = [item.to_dict() for item in controller.queue.upcoming]
+    controller.restart_current()
+    assert player.starts[-1][1] == 0
+    assert controller.queue.current.key == key
+    assert controller.queue.current.position == 0
+    assert store.load_queue().current.position == 0
+    assert [item.to_dict() for item in controller.queue.upcoming] == upcoming
+    assert not store.completed_ids()
+    controller.event(PlayerEvent(old_generation, 'error', 'Stale failure'))
+    assert controller.state == 'loading'
+    controller.close(); store.close()

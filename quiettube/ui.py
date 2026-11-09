@@ -249,7 +249,8 @@ class MainWindow(Gtk.ApplicationWindow):
         position_row.append(self.move_position)
         position_row.append(button("Move", self.move_to_position))
         queue_panel.append(position_row)
-        queue_panel.append(button("Play queue", self.play, "suggested-action"))
+        self.queue_play_button = button("Play queue", self.play, "suggested-action")
+        queue_panel.append(self.queue_play_button)
         queue_panel.append(label("Close video: done & next. Pause to resume later.", "muted small", True))
         queue_panel.append(label("Only the current video is buffered.", "muted small"))
 
@@ -260,6 +261,9 @@ class MainWindow(Gtk.ApplicationWindow):
         self.playback_help_button = button("Playback help", self.open_playback_help)
         self.playback_help_button.set_visible(False)
         status_row.append(self.playback_help_button)
+        self.skip_failed_button = button("Skip failed video", self.skip)
+        self.skip_failed_button.set_visible(False)
+        status_row.append(self.skip_failed_button)
         root.append(status_row)
         transport = box(False, 14)
         transport.add_css_class("transport")
@@ -862,6 +866,8 @@ class MainWindow(Gtk.ApplicationWindow):
     def play(self):
         if self.demo:
             self.set_status("Playback is disabled in preview mode. Launch normally to watch YouTube.")
+        elif self.controller.state == "error":
+            self.open_playback_help()
         else:
             self.controller.play()
 
@@ -897,9 +903,14 @@ class MainWindow(Gtk.ApplicationWindow):
             self.now_detail.set_text("Playback opens in a lightweight mpv window.")
         self.play_button.set_label({"playing": "Pause", "paused": "Resume", "loading": "Loading…"}.get(self.controller.state, "Play"))
         self.play_button.set_sensitive(self.controller.state != "loading")
-        self.playback_help_button.set_visible(self.controller.state == "error" and current is not None)
+        failed = self.controller.state == "error" and current is not None
+        self.playback_help_button.set_visible(failed)
+        self.skip_failed_button.set_visible(failed and bool(queue.upcoming))
+        self.queue_play_button.set_label("Resolve failed video" if failed else "Play queue")
         if self.controller.error:
             self.set_status(self.controller.error, True)
+        elif self.controller.state == "loading" and current:
+            self.set_status(f"Opening: {current.video.title}")
         signature = tuple(item.key for item in queue.upcoming)
         if signature != self.queue_signature:
             selected = self.last_selected
@@ -974,8 +985,26 @@ class MainWindow(Gtk.ApplicationWindow):
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_child(content)
         dialog.set_child(scroll)
-        content.append(label("Playback and account access are separate", "subheading", True))
+        content.append(label("Playback recovery", "subheading", True))
+        content.append(label(item.video.title, "subheading", True))
         content.append(label(self.controller.error or "Playback could not start.", "small", True))
+        content.append(label("If other videos play, this item may be unavailable. A failed live stream or an old "
+                             "resume point can block the queue. Choose how to continue.", "small", True))
+        def recover(action):
+            dialog.close()
+            # The queue may have changed while this dialog was open.
+            if not self.controller.queue.current or self.controller.queue.current.key != item.key:
+                return
+            action()
+        self.retry_saved_button = button("Retry at saved position", lambda: recover(self.controller.reload))
+        content.append(self.retry_saved_button)
+        self.restart_failed_button = button("Start from beginning / live edge", lambda: recover(self.controller.restart_current))
+        content.append(self.restart_failed_button)
+        self.skip_help_button = button("Skip this video and play next", lambda: recover(self.skip), "suggested-action")
+        self.skip_help_button.set_sensitive(bool(self.controller.queue.upcoming))
+        content.append(self.skip_help_button)
+        content.append(label("Skipping removes this item from the queue without marking it fully watched.", "muted small", True))
+        content.append(label("Playback and account access are separate", "subheading", True))
         if self.oauth_mode():
             explanation = ("Personal OAuth connects your dashboard, subscriptions and Likes. It does not sign mpv into "
                            "YouTube's video service. The connected badge describes account data only. Signing in with "
@@ -997,10 +1026,6 @@ class MainWindow(Gtk.ApplicationWindow):
         self.playback_browser_button = button("Open this video on YouTube", open_video, "suggested-action")
         content.append(self.playback_browser_button)
         content.append(button("Copy video link", lambda: self.copy_link(item.video)))
-        def retry():
-            dialog.close()
-            self.reload_video()
-        content.append(button("Retry in mpv at saved position", retry))
         content.append(button("Close", dialog.close))
         dialog.present()
 
