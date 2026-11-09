@@ -146,6 +146,10 @@ def execute(request: dict) -> dict:
             return {**result, "connected": True}
         if destination and destination.is_file():
             atomic_private_write(snapshot, destination.read_bytes())
+        if action == "history_sync":
+            from .watch_history import share_position
+            return share_position(request.get("video_id", ""), request.get("position"),
+                                  snapshot if snapshot.exists() else None, QuietLogger())
         if action == "like":
             from .ratings import like_video
             return like_video(request.get("video_id", ""), snapshot if snapshot.exists() else None, QuietLogger())
@@ -190,7 +194,11 @@ def main():
         result = execute(request)
         print(json.dumps({"ok": True, **result}))
     except Exception as error:
-        if request.get("account_mode") == "oauth" or str(request.get("action", "")).startswith("oauth_"):
+        if request.get("action") == "history_sync":
+            from .watch_history import HistoryError
+            message = str(error) if isinstance(error, HistoryError) else "Watch history could not be shared. Playback is unaffected."
+            print(json.dumps({"ok": False, "error": message}))
+        elif request.get("account_mode") == "oauth" or str(request.get("action", "")).startswith("oauth_"):
             from .account import AccountError
             message = str(error) if isinstance(error, AccountError) else "The personal OAuth request failed. Check the setup and retry."
             code = error.code if isinstance(error, AccountError) else "account_error"

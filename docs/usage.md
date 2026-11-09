@@ -154,8 +154,8 @@ The feed descriptions below refer to browser-session mode unless stated otherwis
 - **Find similar videos:** searches by the video's title. These are topic search
   results, not the personalised YouTube “Up next” sidebar.
 
-Playback does not update YouTube's server-side watch history. Watched filtering
-is local to this computer. Local history, searches, direct links and playlists
+YouTube history sharing is optional and separate from watched filtering, which
+remains local to this computer. Local history, searches, direct links and playlists
 remain available for replay and keep their original ordering. A fully watched
 page keeps **Next page** available when YouTube supplies more results.
 
@@ -189,8 +189,8 @@ position without moving or duplicating queue entries. Choosing **Play now** for
 the current video also retains its position. Pause saves the position immediately.
 The resolution selector is a maximum and applies to the next playback start;
 720p is the default. Some restricted, DRM, paid, regional or bot-challenged content
-may not play. The queue is local and never modifies your YouTube lists or claims
-to synchronise YouTube watch history.
+may not play. The queue is local and does not modify YouTube playlists. Optional
+history sharing reports the video and actual playback position separately.
 
 Likes are an explicit account action, separate from the local queue. A dedicated
 worker handles one Like at a time, so browsing or searching does not cancel it.
@@ -250,6 +250,50 @@ read on import, not continuously; no embedded browser or background browser is a
 The upstream [yt-dlp account documentation](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#logging-in-with-oauth)
 states that OAuth login is not supported for YouTube extraction. A Data API login
 therefore cannot be treated as a replacement for website playback authorization.
+
+## Share watch history and resume on another device
+
+Open **Connect playback** (or **Playback session · saved**) and enable
+**Share watch history and playback position with YouTube**. Sharing is off by
+default for new installations. The switch persists locally and can be turned off
+without removing the playback session, OAuth, queue or local history. Turning it
+off stops future requests; it does not delete history already sent to YouTube.
+
+Sharing uses the YouTube account/channel in the selected **website session**.
+OAuth does not write watch history. Keep YouTube watch history enabled and use
+that same account/channel on the other device. Enabling sharing with a current
+saved video immediately requests its saved position; it does not upload the
+whole local viewing history.
+
+During playback, a separate bounded worker reports the current position at most
+once every 30 seconds, plus a final changed position on pause, stop, reload, skip
+or EOF. It waits for observed playback before automatic reporting. It does not
+mark queued/opened videos fully watched or invent watch time for skipped ranges.
+Paused or idle playback creates no periodic history traffic. The request uses
+`st=et=cmt=current position`, following YouTube.js's position-reporting approach.
+Current live streams are unsupported; ordinary recorded videos can be reported.
+
+The Now playing area distinguishes **Sharing watch history**, **History update
+sent**, and failure. Sent means the requests succeeded, not a server read-back
+for every update. On failure, playback and local resume continue. No infinite
+retry loop or replay of stale positions after reopening is used. Up to five
+pending video updates are retained in memory, coalesced to the latest position
+per video. Requests have a 30-second worker timeout, an 8-second socket timeout,
+and a 4 MiB page-response bound. Shutdown gives the in-flight update up to three
+seconds before cancelling; a final update can be lost on immediate exit or crash.
+
+For a handoff, **pause and wait for History update sent**, then open the same
+video from YouTube History on your other device. YouTube may take time to refresh
+its progress. A live trial retained both a progress bar and the reported resume
+point, but every device/client is not verified. Almost-completed videos may
+restart; YouTube describes resume as usual behavior, not a guarantee. See
+[YouTube progress-bar help](https://support.google.com/youtube/answer/7174115?hl=en).
+
+This is **one-way sharing from QuietTube to YouTube**. Watching farther on another
+device does not update QuietTube's local queue position. Avoid simultaneously
+playing the same video in both, because later reports may replace the resume point.
+No browser engine, OAuth token in mpv, extra API scope or API quota is involved.
+Unofficial website requests remain subject to cookie expiry and YouTube changes.
 
 ## Playback diagnostics
 

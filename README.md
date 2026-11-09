@@ -38,6 +38,8 @@ a controlled Chromium comparison for QuietTube.** See [memory evidence](docs/mem
 - Keep an editable queue: play now, add next, insert, reorder and remove.
 - Save playback position locally; resume, seek, reload a stalled stream and
   select a resolution ceiling (720p by default).
+- Optionally share actual playback positions with YouTube history through the
+  website session, for recommendations and cross-device resume.
 - Show publication ages and hide locally completed videos; newest-first ordering
   applies within each loaded page.
 - Like a video through an explicit account action, confirmed before showing success.
@@ -104,9 +106,12 @@ could return signed-out recommendations, making missing or repeated videos look
 like a filtering problem. Reimporting a session can restore access, but creates
 the recurring dependency on the browser that we want to remove.
 
-There are separate limitations too: mpv playback does not update YouTube watch
-history, and newest-first sorting currently applies only within the loaded page.
-Changing authentication alone will not solve those issues or playback failures.
+History sharing is now an explicit option under **Connect playback**. It reports
+actual positions through the website session, separately from OAuth. A live check
+confirmed the video and matching resume point in YouTube history; future service
+compatibility and immediate cross-device refresh are not guaranteed. Newest-first
+sorting still applies only within the loaded page. See the
+[history-sharing guide](docs/usage.md#share-watch-history-and-resume-on-another-device).
 
 ## Direction: personal credentials and freedom to run locally
 
