@@ -52,6 +52,8 @@ class PlaybackDiagnostics:
         "verification": "YouTube blocked playback with a browser-verification challenge. Signing in with Google OAuth again will not resolve it. See Playback help.",
         "network": "The media server could not be reached. Check your connection and retry.",
         "format": "No playable stream was available at this quality. Try another quality or update with setup.sh.",
+        "stream": "The selected video/audio stream could not be opened. A recently ended live stream may not be ready for playback. Retry later, or skip this video to continue the queue.",
+        "metadata": "mpv could not read the video stream metadata. Retry, or skip this video to continue your queue.",
         "decode": "The video decoder reported a problem. Use Reload video to retry at your current position.",
         "unknown": "Playback failed. Use Playback help, or run setup.sh to check for extractor updates.",
     }
@@ -73,11 +75,15 @@ class PlaybackDiagnostics:
             category = "account"
         elif any(value in message for value in ("connection timed out", "failed to resolve", "network is unreachable")):
             category = "network"
+        elif "edl: could not open source file" in message:
+            category = "stream"
+        elif "failed to parse json data" in message:
+            category = "metadata"
         elif "requested format is not available" in message:
             category = "format"
         elif any(value in message for value in ("error decoding", "invalid frame", "corrupt", "failed to decode")):
             category = "decode"
-        priority = ("unknown", "format", "decode", "network", "account", "forbidden", "verification", "limited")
+        priority = ("unknown", "format", "stream", "metadata", "decode", "network", "account", "forbidden", "verification", "limited")
         if priority.index(category) > priority.index(self.category):
             self.category = category
         return category
@@ -103,7 +109,10 @@ def mpv_command(socket_path: str, height: int, session: Path | None = None) -> l
         f"--script-opts=ytdl_hook-ytdl_path={extractor}",
         "--msg-level=all=no",
     ]
-    raw_options = "js-runtimes=node"
+    # Ended live streams can contain tens of MB of fragment lists for every
+    # alternative format. Drop only unselected formats after selection, keeping
+    # requested_formats/fragments intact for mpv's DASH/EDL playback.
+    raw_options = "js-runtimes=node,parse-metadata=after_video::(?P<formats>)"
     if session:
         raw_options += f",cookies={session}"
     command.append(f"--ytdl-raw-options={raw_options}")

@@ -4,6 +4,33 @@ Verified on 7 November 2026 on this Linux workstation. The historical playback c
 No binary packages for other distributions were produced by these checks.
 
 
+## Failed queue item recovery — 10 November 2026
+
+Read-only local logs showed repeated starts at 6569 seconds failing, followed by
+a different video starting at zero successfully. The previous live item remained
+in Up next after Play now preserved it. This was not evidence of a broken login.
+
+Separate, manually authorized live diagnostics used a temporary session copy,
+paused audio/video-null mpv, and no controller/history sharing. The public item
+was `post_live`; yt-dlp returned valid JSON of 93,950,845 bytes, while mpv reported
+`failed to parse JSON data`. This matches the oversized-response failure described
+in [mpv issue 11566](https://github.com/mpv-player/mpv/issues/11566).
+Dropping `formats` via yt-dlp's `after_video` metadata stage removes the unselected
+alternatives after selection and eliminates the JSON failure. The selected DASH
+fragments remain intact. Actual playback of that ended stream still failed with
+`EDL: Could not open source file`, both at zero and the saved position. Playback
+of that stream is **not verified**; the UI now provides explicit skip/restart/retry
+choices and distinguishes metadata/media errors from account verification.
+
+Automated tests use synthetic data only. They exercise the pinned extractor CLI
+offline to verify that selected formats and fragments survive compaction, and
+check failed-queue recovery, no silent requeue/completion, restart persistence,
+stale dialog protection, and safe diagnostics. The real queue was not edited by
+diagnostics and no real watch-history events were sent.
+
+Validation: `./test.sh` passed with **241 tests and 89% coverage**, including
+real mpv, GTK/Xvfb and memory regressions.
+
 ## Close video to finish and advance — 10 November 2026
 
 At the maintainer's request, closing the mpv window now means done watching and
