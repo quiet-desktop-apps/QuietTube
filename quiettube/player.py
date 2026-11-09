@@ -128,7 +128,7 @@ class MpvPlayer:
 
     def _emit(self, generation, kind, value=None, category=""):
         if generation == self.generation:
-            if kind in {"loaded", "closed", "finished", "error"}:
+            if kind in {"loaded", "closed", "dismissed", "finished", "error"}:
                 self._log(kind, generation, category=category)
             self.callback(PlayerEvent(generation, kind, value, category))
 
@@ -265,7 +265,15 @@ class MpvPlayer:
                         self._emit(generation, event["name"], event["data"])
                     elif name == "end-file":
                         reason = event.get("reason")
-                        if reason == "eof":
+                        if ended:
+                            continue
+                        if reason == "quit":
+                            # A normal player-window close/q is an explicit dismissal.
+                            # App-owned stop/reload has already invalidated generation.
+                            ended = True
+                            self._emit(generation, "dismissed")
+                            return
+                        elif reason == "eof":
                             ended = True
                             self._emit(generation, "finished")
                         elif reason == "error":
