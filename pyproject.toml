@@ -9,7 +9,7 @@ description = "A native, memory-conscious YouTube feed and playback queue for Li
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
 authors = [{name = "Paulo Aboim Pinto"}]
-dependencies = ["yt-dlp[default]==2026.10.26", "SecretStorage==3.5.0; sys_platform == 'linux'", "google-auth==2.62.1", "google-auth-oauthlib==1.5.0"]
+dependencies = ["yt-dlp[default]==2026.10.26", "SecretStorage==3.5.0; sys_platform == 'linux'", "google-auth==2.62.2", "google-auth-oauthlib==1.5.0"]
 
 [project.urls]
 Homepage = "https://github.com/quiet-desktop-apps/QuietTube"
