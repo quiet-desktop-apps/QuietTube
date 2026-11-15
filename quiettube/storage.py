@@ -56,6 +56,10 @@ class Store:
     def cookie_path(self) -> Path:
         return self.directory / "youtube-session.txt"
 
+    @property
+    def playback_cookie_path(self) -> Path:
+        return self.directory / "youtube-playback-session.txt"
+
     def get(self, key: str, default=None):
         row = self.db.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
         if not row:

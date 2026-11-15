@@ -116,7 +116,7 @@ def execute(request: dict) -> dict:
     destination = Path(request["session"]) if request.get("session") else None
     with tempfile.TemporaryDirectory(prefix="quiettube-session-") as temp:
         snapshot = Path(temp) / "youtube.txt"
-        if action == "connect":
+        if action in {"connect", "playback_connect"}:
             if not destination:
                 raise ValueError("Missing session destination")
             if request.get("cookie_file"):
@@ -135,6 +135,11 @@ def execute(request: dict) -> dict:
                     browser, profile=request.get("profile") or suggested_profile(browser) or None,
                     logger=QuietLogger())
             filter_session(source, snapshot)
+            if action == "playback_connect":
+                # This validates the cookie jar, not YouTube playback. Actual mpv
+                # playback is the acceptance check; OAuth feeds stay untouched.
+                atomic_private_write(destination, snapshot.read_bytes())
+                return {"playback_session_saved": True}
             # Verify an authenticated feed before replacing a previously working session.
             result = fetch({"kind": "subscriptions"}, snapshot)
             atomic_private_write(destination, snapshot.read_bytes())

@@ -135,6 +135,11 @@ original Google download outside the checkout too. Routine renewal uses OAuth
 refresh tokens; Google sign-in still opens a browser temporarily and may be needed
 again after expiry or revocation. Home becomes recent subscription uploads, and
 Watch Later is unavailable in this mode. OAuth does not authenticate mpv playback.
+If YouTube blocks anonymous playback, **Connect playback** explicitly imports a
+separate YouTube website session for mpv while keeping OAuth for feeds and Likes.
+You can close the browser afterward. This restores a browser-derived session
+dependency for playback: cookies can expire or be rejected. See the
+[playback connection guide](docs/usage.md#connect-playback-while-keeping-personal-oauth).
 
 **We expect OAuth may improve account reliability, but we have not tested that
 expectation with a live account.** Personal setup is an experiment, not a proven

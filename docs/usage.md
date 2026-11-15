@@ -202,6 +202,55 @@ request is not presented as success.
 Check Liked videos before retrying an ambiguous network failure. No account
 ratings are changed by the automated tests or by opening a feed.
 
+## Connected OAuth but mpv closes immediately
+
+The **Personal OAuth · connected** badge describes access to account feeds, not
+permission to stream video through mpv. If YouTube asks the extractor to confirm
+that it is not a bot, the player cannot start even when refreshing the dashboard
+works. Repeating Google OAuth sign-in does not satisfy that separate check.
+
+A playback error now exposes **Playback help** beside the status message. It
+explains the connection boundary and offers an explicit retry at the saved
+position, Copy video link, or **Open this video on YouTube** in your usual browser.
+Opening the help itself makes no network requests and does not launch a browser.
+The browser link includes the saved playback time. Watching there does not advance
+QuietTube's queue or synchronize its resume position; the queue remains intact.
+
+There is no automatic browser-cookie fallback or retry loop. Waiting before a
+manual retry may help a temporary restriction, but QuietTube cannot guarantee it.
+You can explicitly add the separate playback connection below without changing
+your account feed mode. Google sign-in for account feeds is available near the top
+of the account dialog when OAuth is selected.
+
+### Connect playback while keeping personal OAuth
+
+1. Click **Connect playback** in the header, or **Connect / reconnect playback**
+   inside Playback help.
+2. Use **Open YouTube sign-in** if necessary, then select the browser/profile
+   where you are signed in. You may instead import a Netscape YouTube cookies file.
+3. Click **Save browser session for playback**. Only YouTube cookies are retained,
+   in `youtube-playback-session.txt` under the private application data directory
+   (normally `~/.local/share/quiettube/`). The file is `0600`, its directory `0700`.
+4. Close the browser and dialog, then press **Play**. The current video retries at
+   its saved position. The dashboard and Likes continue using OAuth.
+
+**Playback session · saved** confirms a local session was imported, not that
+YouTube will accept it. The actual playback attempt establishes that. The first
+live authenticated check on 9 November restored playback of the queued video;
+long-term reliability is not established. Reconnect here if the session expires.
+**Remove playback session** deletes only this separate session and stops its
+active player copy; it retains OAuth, the account-feed session, queue and history.
+
+This is opt-in. An older saved browser-account session is not silently reused.
+In browser-session account mode, playback still uses the original account session;
+the separate playback session is used only when personal OAuth is selected.
+Importing does not load feeds or claim a video is playable. Browser cookies are
+read on import, not continuously; no embedded browser or background browser is added.
+
+The upstream [yt-dlp account documentation](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#logging-in-with-oauth)
+states that OAuth login is not supported for YouTube extraction. A Data API login
+therefore cannot be treated as a replacement for website playback authorization.
+
 ## Playback diagnostics
 
 Playback writes private structured logs to

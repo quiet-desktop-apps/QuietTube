@@ -23,6 +23,7 @@ class PlayerEvent:
     generation: int
     kind: str
     value: object = None
+    category: str = ""
 
 
 def playback_format(height: int) -> str:
@@ -47,11 +48,12 @@ class PlaybackDiagnostics:
     MESSAGES = {
         "forbidden": "YouTube rejected the media stream (HTTP 403). Try Play again for a fresh stream.",
         "limited": "YouTube is limiting requests (HTTP 429). Wait a few minutes before retrying.",
-        "account": "YouTube requires a valid session for this video. Reconnect your account and retry.",
+        "account": "YouTube requires a website session for this video. See Playback help for connection options.",
+        "verification": "YouTube blocked playback with a browser-verification challenge. Signing in with Google OAuth again will not resolve it. See Playback help.",
         "network": "The media server could not be reached. Check your connection and retry.",
         "format": "No playable stream was available at this quality. Try another quality or update with setup.sh.",
         "decode": "The video decoder reported a problem. Use Reload video to retry at your current position.",
-        "unknown": "Playback failed. Try Play again; if it persists, reconnect your account or run setup.sh.",
+        "unknown": "Playback failed. Use Playback help, or run setup.sh to check for extractor updates.",
     }
 
     def __init__(self):
@@ -61,7 +63,9 @@ class PlaybackDiagnostics:
         # Higher-priority errors are not overwritten by generic follow-up logs.
         message = message[:16_384].lower()
         category = "unknown"
-        if re.search(r"(?:http(?: error)?|server returned)\s+403\b", message):
+        if "not a bot" in message:
+            category = "verification"
+        elif re.search(r"(?:http(?: error)?|server returned)\s+403\b", message):
             category = "forbidden"
         elif re.search(r"(?:http(?: error)?|server returned)\s+429\b", message):
             category = "limited"
@@ -73,7 +77,7 @@ class PlaybackDiagnostics:
             category = "format"
         elif any(value in message for value in ("error decoding", "invalid frame", "corrupt", "failed to decode")):
             category = "decode"
-        priority = ("unknown", "format", "decode", "network", "account", "forbidden", "limited")
+        priority = ("unknown", "format", "decode", "network", "account", "forbidden", "verification", "limited")
         if priority.index(category) > priority.index(self.category):
             self.category = category
         return category
@@ -122,11 +126,11 @@ class MpvPlayer:
         self.thread = None
         self.send_lock = threading.Lock()
 
-    def _emit(self, generation, kind, value=None):
+    def _emit(self, generation, kind, value=None, category=""):
         if generation == self.generation:
             if kind in {"loaded", "closed", "finished", "error"}:
-                self._log(kind, generation)
-            self.callback(PlayerEvent(generation, kind, value))
+                self._log(kind, generation, category=category)
+            self.callback(PlayerEvent(generation, kind, value, category))
 
     def _log(self, event, generation, **fields):
         if self.log:
@@ -266,7 +270,7 @@ class MpvPlayer:
                             self._emit(generation, "finished")
                         elif reason == "error":
                             ended = True
-                            self._emit(generation, "error", diagnostics.error())
+                            self._emit(generation, "error", diagnostics.error(), diagnostics.category)
             if not ended:
                 self._emit(generation, "closed")
         except OSError:

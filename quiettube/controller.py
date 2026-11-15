@@ -14,6 +14,7 @@ class PlaybackController:
         self.queue = store.load_queue()
         self.state = "stopped"
         self.error = ""
+        self.error_category = ""
         self.duration = 0.0
         self.height = store.get("quality", 720)
         if self.height not in {480, 720, 1080, 1440, 2160}:
@@ -60,6 +61,7 @@ class PlaybackController:
 
     def _start(self):
         self.error = ""
+        self.error_category = ""
         self.duration = 0
         self.save()
         if not self.queue.current:
@@ -68,7 +70,9 @@ class PlaybackController:
         else:
             self.state = "loading"
             item = self.queue.current
-            session = None if self.store.get("account_mode", "browser") == "oauth" else self.store.cookie_path
+            session = self.store.cookie_path
+            if self.store.get("account_mode", "browser") == "oauth":
+                session = self.store.playback_cookie_path if self.store.get("playback_session_enabled", False) else None
             self.player.start(item.video.url, item.position, self.height, session)
         self.changed()
 
@@ -105,6 +109,7 @@ class PlaybackController:
             self.player.stop()
             self.state = "error"
             self.error = str(event.value)
+            self.error_category = event.category
             self.save()
         elif event.kind == "closed":
             self.player.stop()

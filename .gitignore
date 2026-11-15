@@ -34,3 +34,7 @@ test-output/
 cookies*.txt
 node_modules/
 .venv/
+
+# YouTube sessions must never enter source control, even with a custom data directory.
+youtube-session.txt
+youtube-playback-session.txt
