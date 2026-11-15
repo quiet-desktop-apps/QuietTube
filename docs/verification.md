@@ -4,6 +4,29 @@ Verified on 7 November 2026 on this Linux workstation. The historical playback c
 No binary packages for other distributions were produced by these checks.
 
 
+## Close video to finish and advance — 10 November 2026
+
+At the maintainer's request, closing the mpv window now means done watching and
+advances immediately, including for a live item with no natural end. This replaces
+the earlier close-preserves behavior recorded in historical checks below.
+
+A structured mpv `end-file` event with reason `quit` emits `dismissed`, which the
+controller handles like local completion. Socket loss is still `closed`, not a
+user dismissal. The app invalidates the player generation before Stop/reload or
+shutdown, preventing stale events from consuming another item. Local completion
+stores the actual position, not the video's full duration; history reporting
+continues using that actual position.
+
+Regression checks cover real mpv quit and CLOSE_WIN input, a killed player,
+close-to-next followed by EOF, duration-zero items, last-item shutdown, duplicate
+terminal events, saved state across restart, Pause/Stop/reload/app shutdown, and
+immediate watched-card filtering. They use local synthetic media and temporary
+stores, never the live account or real queue. The saved real queue was inspected
+read-only for duplicate current entries; it was not edited.
+
+Validation: `./test.sh` passed with **235 tests and 89% coverage**, including
+GTK under Xvfb, real mpv integration and the memory regression checks.
+
 ## Watch history and resume sharing — 9 November 2026
 
 The maintainer explicitly authorized sharing history and the current playback

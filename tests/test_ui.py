@@ -126,7 +126,8 @@ def test_wall_options_do_not_hide_or_reorder_other_feeds(window, feed):
     assert not window.wall_controls.get_visible()
 
 
-def test_eof_hides_finished_video_but_errors_and_stale_events_do_not(window):
+@pytest.mark.parametrize("completion", ["finished", "dismissed"])
+def test_completion_hides_video_but_errors_and_stale_events_do_not(window, completion):
     from quiettube.models import Video
     from quiettube.player import PlayerEvent
     from test_controller import FakePlayer
@@ -136,13 +137,13 @@ def test_eof_hides_finished_video_but_errors_and_stale_events_do_not(window):
     window.controller.queue.upcoming.clear()
     window.controller.play_now(first)
     window.show_videos([first, second])
-    window.on_player(PlayerEvent(player.generation - 1, "finished"))
+    window.on_player(PlayerEvent(player.generation - 1, completion))
     assert window.videos == [first, second]
     window.on_player(PlayerEvent(player.generation, "error", "Offline"))
     assert window.videos == [first, second]
     assert window.store.completed_ids() == set()
     window.controller.play()
-    window.on_player(PlayerEvent(player.generation, "finished"))
+    window.on_player(PlayerEvent(player.generation, completion))
     assert window.videos == [second]
     assert window.store.completed_ids() == {first.id}
 
