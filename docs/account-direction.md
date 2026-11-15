@@ -41,8 +41,9 @@ A copied session remains a dependency on YouTube's website login:
 - Returning to the browser to repair account access conflicts with the intended
   day-to-day experience, even though the browser stays closed during playback.
 
-Other observed limitations have different causes. Watching through mpv does not
-update YouTube watch history; QuietTube's completed-video filtering is local.
+Other observed limitations have different causes. Optional website-session
+reporting now shares playback positions with YouTube; it is separate from OAuth
+and from QuietTube's local completed-video filtering.
 Sorting a loaded page cannot find newer videos on pages not fetched. Home
 recommendations are not a complete chronological subscription feed. Decoder,
 network or stream failures are playback issues, not necessarily login failures.

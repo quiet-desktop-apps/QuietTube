@@ -60,6 +60,11 @@ class Store:
     def playback_cookie_path(self) -> Path:
         return self.directory / "youtube-playback-session.txt"
 
+    def playback_session(self):
+        if self.get("account_mode", "browser") == "oauth":
+            return self.playback_cookie_path if self.get("playback_session_enabled", False) else None
+        return self.cookie_path
+
     def get(self, key: str, default=None):
         row = self.db.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
         if not row:

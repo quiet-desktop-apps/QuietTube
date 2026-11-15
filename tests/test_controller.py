@@ -187,3 +187,23 @@ def test_oauth_playback_session_is_explicit_separate_and_persistent(tmp_path):
     assert store.get('oauth_authorized')
     controller.close()
     store.close()
+
+
+def test_history_observations_flush_old_video_before_queue_transition(tmp_path):
+    store, player, controller = build(tmp_path)
+    events = []
+    controller.observe = events.append
+    controller.event(PlayerEvent(player.generation, 'loaded'))
+    controller.event(PlayerEvent(player.generation, 'time-pos', 22))
+    controller.event(PlayerEvent(player.generation, 'pause', True))
+    assert events[-1].kind == 'pause' and events[-1].position == 22
+    assert not events[-1].playing
+    old = controller.queue.current.video.id
+    controller.event(PlayerEvent(player.generation, 'finished'))
+    assert events[-2].kind == 'boundary' and events[-2].video_id == old
+    assert events[-2].position == 22
+    assert events[-1].kind == 'start' and events[-1].video_id != old
+    count = len(events)
+    controller.event(PlayerEvent(player.generation - 1, 'time-pos', 900))
+    assert len(events) == count
+    controller.close(); store.close()
