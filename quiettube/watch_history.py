@@ -19,6 +19,10 @@ MAX_RESPONSE = 4 * 1024 * 1024
 class HistoryError(Exception):
     """Only fixed, safe messages may cross the worker boundary."""
 
+    def __init__(self, message, code="history_error"):
+        super().__init__(message)
+        self.code = code if code in {"history_error", "history_session_required"} else "history_error"
+
 
 def position_seconds(value):
     if type(value) not in (int, float) or not math.isfinite(value) or not 0 < value < 7 * 86400:
@@ -55,7 +59,7 @@ class HistoryClient:
         page = self.read('https://www.youtube.com/watch?v=' + ident)
         config = self.extractor.extract_ytcfg(ident, page)
         if config.get('LOGGED_IN') is not True:
-            raise HistoryError("Reconnect the playback session to share history with YouTube.")
+            raise HistoryError("Reconnect the active YouTube website session to share history.", "history_session_required")
         player = self.extractor._search_json(
             r'ytInitialPlayerResponse\s*=', page, 'player response', ident, default={})
         if player.get('videoDetails', {}).get('videoId') != ident:
@@ -93,7 +97,7 @@ def report_position(client, ident, position):
 @contextmanager
 def history_client(session: Path, logger):
     if not session or not session.is_file():
-        raise HistoryError("Connect a playback session before sharing watch history.")
+        raise HistoryError("Connect a YouTube website session before sharing watch history.", "history_session_required")
     from yt_dlp import YoutubeDL
     from yt_dlp.extractor.youtube import YoutubeIE
     with YoutubeDL({'cookiefile': str(session), 'logger': logger, 'quiet': True,

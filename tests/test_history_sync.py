@@ -105,6 +105,7 @@ def test_no_missing_session_no_retries_and_bounded_pending(tmp_path):
     observe(sync, clock, 20, 'share')
     assert not tasks.requests and 'connect playback' in statuses[-1]
     store.playback_cookie_path.write_text('synthetic')
+    sync.reset()  # Explicit reconnection releases the failed-session latch.
     observe(sync, clock, 20, 'share')
     sync.on_result(TaskResult(tasks.generation, error='failure'))
     assert len(tasks.requests) == 1
@@ -113,4 +114,43 @@ def test_no_missing_session_no_retries_and_bounded_pending(tmp_path):
     for n in range(100): observe(sync, clock, 22, 'share', key=str(n), ident=str(n))
     assert len(sync.pending) == sync.MAX_PENDING
     assert len(tasks.requests) == 2
+    sync.close(); store.close()
+
+
+def test_expired_session_is_actionable_persistent_and_stops_failed_requests(tmp_path):
+    from quiettube.diagnostics import PlaybackLog
+    store, sync, tasks, clock, statuses = build(tmp_path)
+    sync.log = PlaybackLog(tmp_path/'logs')
+    store.set('account_mode', 'browser')
+    store.cookie_path.write_text('synthetic')
+    store.set('share_watch_history', True)
+    observe(sync, clock, 20, 'share')
+    observe(sync, clock, 30, 'share')
+    sync.on_result(TaskResult(tasks.generation, {'code':'history_session_required'}, error='PRIVATE raw error'))
+    assert sync.connection_required and not sync.pending
+    assert 'reconnect browser account' in statuses[-1]
+    assert store.get('history_sync_outcome') == 'session_required'
+    for n in range(50): observe(sync, clock, 40+n, 'share')
+    assert len(tasks.requests) == 1
+    assert 'PRIVATE' not in sync.log.path.read_text()
+    assert 'history_session_required' in sync.log.path.read_text()
+    sync.reset()
+    observe(sync, clock, 90, 'share')
+    finish(sync,tasks)
+    assert len(tasks.requests) == 2 and store.get('history_sync_outcome') == 'sent'
+    assert 'not checked' in statuses[-1]
+    sync.close(); store.close()
+
+
+def test_saved_inflight_status_is_not_reported_as_active_after_restart(tmp_path):
+    store, sync, tasks, clock, statuses = build(tmp_path)
+    store.set('share_watch_history', True)
+    store.set('history_sync_outcome', 'sending')
+    assert 'not confirmed' in sync.status_text()
+    observe(sync,clock,20,'share')
+    assert statuses[-1] == 'Sharing watch history…'
+    sync.reset()
+    store.set('share_watch_history', False)
+    sync.enqueue(PlaybackObservation('saved','jNQXAC9IVRw',80,False,'share'))
+    assert len(tasks.requests) == 1 and not sync.pending
     sync.close(); store.close()

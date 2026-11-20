@@ -8,7 +8,7 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango
 
 from .controller import PlaybackController
-from .history_sync import HistorySync
+from .history_sync import HistorySync, PlaybackObservation
 from .browsers import suggested_profile
 from .models import Video, duration_label, finite_seconds, playlist_url, published_label, publication_sort_key, video_id
 from .player import MpvPlayer
@@ -88,7 +88,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.store = Store(directory)
         self.playback_log = PlaybackLog(self.store.directory / "logs")
         self.player = MpvPlayer(lambda event: GLib.idle_add(self.on_player, event), log=self.playback_log)
-        self.history_sync = HistorySync(self.store, GLib.idle_add, self.history_status_changed)
+        self.history_sync = HistorySync(self.store, GLib.idle_add, self.history_status_changed, log=self.playback_log)
         self.controller = PlaybackController(self.store, self.player, self.refresh_transport, self.history_sync.observe)
         self.tasks = ExtractorTasks(lambda result: GLib.idle_add(self.on_result, result))
         self.rating_tasks = ExtractorTasks(lambda result: GLib.idle_add(self.on_like_result, result))
@@ -195,6 +195,14 @@ class MainWindow(Gtk.ApplicationWindow):
         self.cancel_button.set_visible(False)
         title_row.append(self.cancel_button)
         main.append(title_row)
+        self.history_notice = box(False, 8)
+        self.history_notice_label = label(self.history_sync.status_text(), "muted small", True)
+        self.history_notice_label.set_hexpand(True)
+        self.history_notice.append(self.history_notice_label)
+        self.history_reconnect_button = button("Reconnect for history", self.reconnect_history)
+        self.history_notice.append(self.history_reconnect_button)
+        self.history_notice.set_visible(False)
+        main.append(self.history_notice)
         self.wall_controls = box(False)
         self.wall_order = Gtk.DropDown.new_from_strings(["Newest first", "YouTube order"])
         self.wall_order.set_selected(0 if self.store.get("wall_newest", True) else 1)
@@ -276,7 +284,7 @@ class MainWindow(Gtk.ApplicationWindow):
         now.append(self.now_title)
         self.now_detail = label("Playback opens in a lightweight mpv window.", "muted small")
         now.append(self.now_detail)
-        self.history_status = label("History sharing on" if self.store.get("share_watch_history", False) else "History sharing off", "muted small")
+        self.history_status = label(self.history_sync.status_text(), "muted small")
         self.history_status.set_ellipsize(Pango.EllipsizeMode.END)
         self.history_status.set_max_width_chars(55)
         now.append(self.history_status)
@@ -309,6 +317,35 @@ class MainWindow(Gtk.ApplicationWindow):
     def history_status_changed(self, text):
         if not self.closed:
             self.history_status.set_text(text)
+            self.history_status.set_tooltip_text(text)
+            self.history_notice_label.set_text(text)
+            needs_session = self.store.get("history_sync_outcome") == "session_required" and self.history_sync.enabled()
+            self.history_reconnect_button.set_visible(needs_session)
+            self.history_notice.set_visible(self.feed == "history" or needs_session)
+
+    def reconnect_history(self):
+        if not self.demo:
+            if self.oauth_mode():
+                self.open_playback_connection()
+            else:
+                self.open_account()
+
+    def share_saved_history(self, video):
+        if self.demo:
+            return
+        if not self.history_sync.enabled():
+            self.set_status("Enable watch history sharing in Connect playback before sending saved history.")
+            self.open_playback_connection()
+            return
+        if self.history_sync.connection_required:
+            self.reconnect_history()
+            return
+        row = self.store.db.execute("SELECT position FROM history WHERE video_id=?", (video.id,)).fetchone()
+        if row and row[0] > 0:
+            # Explicit resend must not replace the live player's observation state.
+            self.history_sync.enqueue(PlaybackObservation("saved-" + video.id, video.id, row[0], False, "share"))
+        else:
+            self.set_status("There is no saved viewing position to share for this video.")
 
     def history_sharing_changed(self, enabled):
         self.history_sync.reset()
@@ -415,12 +452,12 @@ class MainWindow(Gtk.ApplicationWindow):
         preview.set_overflow(Gtk.Overflow.HIDDEN)
         preview.add_css_class("preview")
         if video.id in self.watched_ids:
-            watched = label("✓ Watched", "pill")
+            watched = label("✓ Watched here", "pill")
             watched.set_halign(Gtk.Align.START)
             watched.set_valign(Gtk.Align.END)
             watched.set_margin_start(8)
             watched.set_margin_bottom(8)
-            watched.set_tooltip_text("Completed in QuietTube on this computer")
+            watched.set_tooltip_text("Completed in QuietTube on this computer; not confirmation of YouTube history")
             preview.add_overlay(watched)
         card.append(preview)
         if not self.demo:
@@ -485,6 +522,8 @@ class MainWindow(Gtk.ApplicationWindow):
         items.append(button("Insert before selected", lambda: perform(lambda: self.insert_selected(video))))
         items.append(button("Find similar videos", lambda: perform(lambda: self.find_similar(video))))
         items.append(button("Copy YouTube link", lambda: perform(lambda: self.copy_link(video))))
+        if self.feed == "history":
+            items.append(button("Share saved position with YouTube", lambda: perform(lambda: self.share_saved_history(video))))
         popover.set_child(items)
         menu.set_popover(popover)
         actions.append(menu)
@@ -510,10 +549,11 @@ class MainWindow(Gtk.ApplicationWindow):
         titles = {"home": "Your home feed", "subscriptions": "Latest from your subscriptions",
                   "later": "Your Watch Later", "liked": "Your liked videos", "history": "Recently watched here"}
         self.feed_title.set_text(titles.get(kind, "Videos"))
-        self.feed_caption.set_text("Your YouTube account feed." if kind != "history" else "History saved on this computer.")
+        self.feed_caption.set_text("Your YouTube account feed." if kind != "history" else "History saved on this computer. Watched here does not confirm YouTube received it.")
         if self.oauth_mode() and kind in {"home", "subscriptions"}:
             self.feed_title.set_text("Recent subscription uploads")
             self.feed_caption.set_text("Personal OAuth · newest uploads, not YouTube Home recommendations.")
+        self.history_status_changed(self.history_sync.status_text())
         for key, nav in self.nav.items():
             nav.remove_css_class("active")
             if key == kind:

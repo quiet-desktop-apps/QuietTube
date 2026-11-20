@@ -41,6 +41,7 @@ a controlled Chromium comparison for QuietTube.** See [memory evidence](docs/mem
   select a resolution ceiling (720p by default).
 - Optionally share actual playback positions with YouTube history through the
   website session, for recommendations and cross-device resume.
+- Clear history-session reconnect notices and per-video saved-position resend from Local history.
 - Show publication ages and hide locally completed videos; newest-first ordering
   applies within each loaded page.
 - Like a video through an explicit account action, confirmed before showing success.

@@ -392,3 +392,23 @@ segments that mpv cannot open. QuietTube strips unselected format metadata after
 quality selection to avoid mpv's oversized-JSON failure, while retaining the
 selected audio/video fragments. This does not guarantee those media segments
 are available; skipping remains an explicit user choice.
+
+### When QuietTube history is missing from YouTube
+
+The **Watched here** badge records local completion only. Public video playback
+can still work after YouTube stops accepting the saved session as signed in.
+In that case history sharing pauses, and a **Reconnect for history** banner
+opens the connection used by the active mode: the browser account in browser
+mode, or the separate playback session in personal OAuth mode. Saving OAuth
+credentials again does not refresh a website session.
+
+After reconnecting, new playback positions are shared normally. To resend an
+older saved position, open **Local history**, use the video's **⋮** menu and
+choose **Share saved position with YouTube**. Sharing must be enabled. This
+sends the actual saved position without starting playback, changing the queue,
+or claiming the full video was watched. There is no automatic bulk upload.
+
+History outcomes persist across restarts and safe `history_*` events appear in
+the existing private, rotated playback log. A sent update means HTTP acceptance,
+not confirmed visibility in YouTube history; processing can take time. Interrupted
+updates are labelled unconfirmed rather than still sending after a restart.

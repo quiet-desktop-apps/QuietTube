@@ -19,8 +19,10 @@ class HistorySync:
     INTERVAL = 30
     MAX_PENDING = 5
 
-    def __init__(self, store, dispatch, status=lambda text: None, clock=time.monotonic, tasks=None):
+    def __init__(self, store, dispatch, status=lambda text: None, clock=time.monotonic, tasks=None, log=None):
         self.store, self.status, self.clock = store, status, clock
+        self.log = log
+        self.connection_required = False
         self.tasks = tasks or ExtractorTasks(lambda result: dispatch(self.on_result, result), timeout=30)
         self.pending = OrderedDict()
         self.inflight = None
@@ -31,11 +33,33 @@ class HistorySync:
         self.watched = 0.0
         self.closed = False
 
+    def publish(self, outcome):
+        # Persist/log only fixed outcomes: no URLs, cookie data or raw worker errors.
+        self.store.set('history_sync_outcome', outcome)
+        if self.log:
+            self.log.write('history_' + outcome, self.tasks.generation)
+        self.status(self.status_text(outcome))
+
+    def status_text(self, outcome=None):
+        if not self.enabled():
+            return 'History sharing off'
+        if outcome is None:
+            outcome = self.store.get('history_sync_outcome', '')
+            if outcome == 'sending' and not self.inflight:
+                return 'Last history update not confirmed · share the saved position to retry'
+        if outcome == 'session_required':
+            return ('YouTube history not synced · reconnect browser account' if
+                    self.store.get('account_mode', 'browser') == 'browser' else
+                    'YouTube history not synced · reconnect playback session')
+        return {'sent': 'History update sent · YouTube confirmation not checked',
+                'failed': 'History update failed · playback continues',
+                'sending': 'Sharing watch history…'}.get(outcome, 'History sharing on')
+
     def enabled(self):
         return bool(self.store.get('share_watch_history', False))
 
     def observe(self, event: PlaybackObservation):
-        if self.closed or not self.enabled():
+        if self.closed or not self.enabled() or self.connection_required:
             return
         now = self.clock()
         previous = self.current
@@ -59,9 +83,12 @@ class HistorySync:
                     self.last_position_sent = event.position
 
     def enqueue(self, event):
+        if self.closed or not self.enabled() or self.connection_required:
+            return
         session = self.store.playback_session()
         if not session or not session.is_file():
-            self.status('History not sent · connect playback')
+            self.connection_required = True
+            self.publish('session_required')
             return
         # Capture which session this update belongs to; account changes call reset.
         self.pending[event.video_id] = {'action': 'history_sync', 'video_id': event.video_id,
@@ -72,10 +99,10 @@ class HistorySync:
         self.pump()
 
     def pump(self):
-        if self.closed or self.inflight or not self.pending or not self.enabled():
+        if self.closed or self.inflight or not self.pending or not self.enabled() or self.connection_required:
             return
         _, self.inflight = self.pending.popitem(last=False)
-        self.status('Sharing watch history…')
+        self.publish('sending')
         self.tasks.submit(self.inflight)
 
     def on_result(self, result):
@@ -86,15 +113,22 @@ class HistorySync:
         if (not result.error and data.get('history_sent') is True
                 and data.get('video_id') == sent['video_id']):
             # HTTP acceptance is not a per-update read-back verification.
-            self.status('History update sent · resume on YouTube may take time')
+            self.publish('sent')
+        elif data.get('code') == 'history_session_required':
+            self.connection_required = True
+            self.pending.clear()
+            self.publish('session_required')
         else:
-            self.status('History update failed · playback continues')
+            self.publish('failed')
             # No retry loop and no replay of stale positions after a restart.
         self.pump()
         return False
 
     def reset(self):
         self.tasks.cancel()
+        self.connection_required = False
+        self.store.set('history_sync_outcome', '')
+        self.status(self.status_text())
         self.pending.clear()
         self.inflight = self.current = None
         self.watched = 0
