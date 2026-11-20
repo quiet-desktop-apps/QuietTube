@@ -739,3 +739,50 @@ def test_recovery_restart_and_stale_dialog_cannot_change_other_item(window):
     stale.emit('clicked')
     assert window.controller.queue.to_dict() == before
     assert len(window.player.starts) == starts
+
+
+def test_history_connection_error_is_visible_and_routes_active_session(window, monkeypatch):
+    from quiettube.tasks import TaskResult
+    from quiettube.history_sync import PlaybackObservation
+    window.demo = False
+    window.store.set('share_watch_history', True)
+    window.store.set('account_mode', 'browser')
+    window.store.cookie_path.write_text('synthetic')
+    monkeypatch.setattr(window.history_sync.tasks, 'submit', lambda request: None)
+    window.history_sync.enqueue(PlaybackObservation('one','11111111111',30,False,'share'))
+    window.history_sync.on_result(TaskResult(window.history_sync.tasks.generation,
+        {'code':'history_session_required'}, error='PRIVATE'))
+    assert window.history_notice.get_visible()
+    assert 'reconnect browser account' in window.history_notice_label.get_text()
+    assert window.history_reconnect_button.get_visible()
+    opened=[]
+    monkeypatch.setattr(window, 'open_account', lambda: opened.append('account'))
+    monkeypatch.setattr(window, 'open_playback_connection', lambda: opened.append('playback'))
+    window.history_reconnect_button.emit('clicked')
+    window.store.set('account_mode', 'oauth')
+    window.history_reconnect_button.emit('clicked')
+    assert opened == ['account','playback']
+    assert 'PRIVATE' not in window.history_notice_label.get_text()
+
+
+def test_share_saved_history_preserves_live_queue_and_reports_only_saved_position(window, monkeypatch):
+    from quiettube.ui import DEMO_VIDEOS
+    from quiettube.history_sync import PlaybackObservation
+    window.demo = False
+    window.store.set('share_watch_history', True)
+    window.store.cookie_path.write_text('synthetic')
+    window.store.record(DEMO_VIDEOS[1],123,completed=True)
+    current = PlaybackObservation('live','11111111111',50,True,'position')
+    window.history_sync.current = current
+    before = window.controller.queue.to_dict()
+    calls=[]
+    monkeypatch.setattr(window.history_sync.tasks, 'submit', lambda request: calls.append(request))
+    window.share_saved_history(DEMO_VIDEOS[1])
+    assert calls[-1]['position'] == 123 and calls[-1]['video_id'] == DEMO_VIDEOS[1].id
+    assert window.history_sync.current == current
+    assert window.controller.queue.to_dict() == before
+    window.store.set('share_watch_history', False)
+    opened=[]
+    monkeypatch.setattr(window, 'open_playback_connection', lambda: opened.append(True))
+    window.share_saved_history(DEMO_VIDEOS[0])
+    assert len(calls) == 1 and opened == [True]

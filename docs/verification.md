@@ -4,6 +4,34 @@ Verified on 7 November 2026 on this Linux workstation. The historical playback c
 No binary packages for other distributions were produced by these checks.
 
 
+## History session recovery — 20 November 2026
+
+History sharing was enabled, but read-only diagnostics of both saved website
+sessions returned `LOGGED_IN: false` on a matching YouTube watch page. The
+previously selected Chromium profile still provided a signed-in session. The
+active browser-account session was refreshed from that profile using a temporary
+copy; OAuth settings, the separate playback session and the local queue were
+unchanged.
+
+As requested, the most recent completed local item's actual position was sent.
+Subsequent YouTube history read-back confirmed its entry. Among the five most
+recent completed entries, two were then already present; the other three actual
+positions were sent. Immediate read-back did not show them, but a later read-only
+check confirmed **all five**. Both legacy `videoRenderer` and current
+`lockupViewModel.contentId` structures were inspected. No other historical entries
+were uploaded. No private IDs, titles, cookies, page bodies or signed URLs are
+included here. These manual account checks are separate from automated tests.
+
+The app now preserves a typed session-required failure, displays an actionable
+banner for the correct account mode, stops repeated requests with the failed
+session until reconnection/reset, and records only safe fixed outcomes in its
+existing rotated log. Local badges explicitly say Watched here. Per-video
+resending from Local history requires opt-in and preserves the active playback
+observation and queue. HTTP success is still labelled sent, not remotely verified.
+
+Validation: `./test.sh` passed **246 tests with 89% coverage**, including real
+mpv, GTK/Xvfb, offline session errors, privacy guards and memory regressions.
+
 ## Failed queue item recovery — 10 November 2026
 
 Read-only local logs showed repeated starts at 6569 seconds failing, followed by

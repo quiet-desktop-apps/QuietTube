@@ -13,7 +13,8 @@ from .storage import private_directory
 class PlaybackLog:
     MAX_BYTES = 1024 * 1024
     EVENTS = {"start", "stop", "loaded", "closed", "finished", "error", "pause",
-              "snapshot", "warning", "seek", "seeked", "ipc_closed", "dismissed"}
+              "snapshot", "warning", "seek", "seeked", "ipc_closed", "dismissed",
+              "history_sending", "history_sent", "history_failed", "history_session_required"}
     NUMBERS = {"position", "height", "time-pos", "duration", "audio-pts", "avsync",
                "decoder-frame-drop-count", "frame-drop-count", "demuxer-cache-duration",
                "pause_seconds", "exit_code"}

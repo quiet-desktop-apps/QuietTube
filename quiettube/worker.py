@@ -197,7 +197,8 @@ def main():
         if request.get("action") == "history_sync":
             from .watch_history import HistoryError
             message = str(error) if isinstance(error, HistoryError) else "Watch history could not be shared. Playback is unaffected."
-            print(json.dumps({"ok": False, "error": message}))
+            code = error.code if isinstance(error, HistoryError) else "history_error"
+            print(json.dumps({"ok": False, "error": message, "code": code}))
         elif request.get("account_mode") == "oauth" or str(request.get("action", "")).startswith("oauth_"):
             from .account import AccountError
             message = str(error) if isinstance(error, AccountError) else "The personal OAuth request failed. Check the setup and retry."

@@ -138,3 +138,15 @@ def test_bounded_reads_and_http_failure():
     response.status = 403
     with pytest.raises(HistoryError, match='not accept'):
         client.send('synthetic')
+
+
+def test_worker_emits_safe_session_failure_code(monkeypatch, capsys):
+    import io, json
+    from quiettube import worker
+    def expired(_):
+        raise HistoryError('Reconnect the active YouTube website session to share history.', 'history_session_required')
+    monkeypatch.setattr(worker, 'execute', expired)
+    monkeypatch.setattr(worker.sys, 'stdin', io.TextIOWrapper(io.BytesIO(b'{"action":"history_sync"}')))
+    worker.main()
+    result = json.loads(capsys.readouterr().out)
+    assert not result['ok'] and result['code'] == 'history_session_required'
