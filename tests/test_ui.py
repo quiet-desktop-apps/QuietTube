@@ -81,6 +81,26 @@ def test_reload_control_preserves_position_and_queue(window):
     assert window.controller.queue.upcoming == upcoming
 
 
+def test_start_over_control_works_during_playback_and_preserves_queue(window):
+    from test_controller import FakePlayer
+    from quiettube.ui import DEMO_VIDEOS
+    window.demo = False
+    window.player = window.controller.player = FakePlayer()
+    window.controller.play_now(DEMO_VIDEOS[0])
+    window.controller.queue.current.position = 204
+    key = window.controller.queue.current.key
+    upcoming = list(window.controller.queue.upcoming)
+    window.start_over_button.emit("clicked")
+    assert window.player.starts[-1][1] == 0
+    assert window.controller.queue.current.key == key
+    assert window.controller.queue.upcoming == upcoming
+    assert window.store.load_queue().current.position == 0
+    window.demo = True
+    starts = len(window.player.starts)
+    window.start_over_button.emit("clicked")
+    assert len(window.player.starts) == starts
+
+
 def test_wall_defaults_to_newest_and_hides_completed_on_refresh(window):
     from quiettube.models import Video
     old = Video("11111111111", "Old", published="20260101")

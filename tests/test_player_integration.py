@@ -226,6 +226,81 @@ def test_real_http_rejection_reports_safe_reason():
         thread.join(timeout=2)
 
 
+@pytest.mark.parametrize("recover_public", [False, True])
+def test_missing_hls_opening_segments_never_become_watch_progress(tmp_path, recover_public):
+    """Real FFmpeg skips rejected segments unless QuietTube catches the discard."""
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "testsrc2=size=160x90:rate=15", "-t", "6", "-c:v", "libx264",
+                    "-preset", "ultrafast", "-g", "15", "-sc_threshold", "0",
+                    "-hls_time", "1", "-hls_list_size", "0", str(tmp_path / "sample.m3u8")], check=True)
+
+    class Files(SimpleHTTPRequestHandler):
+        def do_GET(self):
+            broken = self.path.startswith("/broken/")
+            self.path = "/" + self.path.split("/", 2)[-1]
+            if broken and self.path in {"/sample0.ts", "/sample1.ts"}:
+                self.send_error(403)
+            else:
+                super().do_GET()
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(Files, directory=str(tmp_path)))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    events = SimpleQueue()
+
+    class LocalPlayer(MpvPlayer):
+        def start(self, url, position=0, height=720, session=None):
+            route = "working" if recover_public and session is None else "broken"
+            return super().start(f"http://127.0.0.1:{server.server_port}/{route}/sample.m3u8",
+                                 position, height,
+                                 extra_args=["--vo=null", "--ao=null", "--force-window=no", "--ytdl=no"])
+
+    store = Store(tmp_path / "store")
+    if recover_public:
+        store.cookie_path.write_text("synthetic session")
+    player = LocalPlayer(events.put)
+    observations = []
+    controller = PlaybackController(store, player, observe=observations.append)
+    controller.add(Video("11111111111", "Synthetic HLS"))
+    controller.add(Video("22222222222", "Next item"))
+    seen = []
+    try:
+        controller.play()
+        first_generation = player.generation
+
+        def pump():
+            while not events.empty():
+                event = events.get()
+                seen.append(event)
+                controller.event(event)
+            if recover_public:
+                return controller.state == "playing" and controller.queue.current.position > 0.1
+            return controller.state == "error"
+
+        wait_for(pump, timeout=15)
+        failures = [e for e in seen if e.kind == "error"]
+        assert len(failures) == 1
+        assert failures[0].category == "segments"
+        assert failures[0].generation == first_generation
+        assert not any(e.kind in {"finished", "dismissed"} for e in seen)
+        assert not any(e.kind == "time-pos" and e.value >= 1 for e in seen)
+        assert all(o.position < 1 for o in observations)
+        assert controller.queue.current.video.id == "11111111111"
+        assert controller.queue.upcoming[0].video.id == "22222222222"
+        assert not store.completed_ids()
+        if recover_public:
+            assert any(e.kind == "loaded" and e.generation != first_generation for e in seen)
+    finally:
+        controller.close()
+        store.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 def queued_player(tmp_path, clip):
     events = SimpleQueue()
 

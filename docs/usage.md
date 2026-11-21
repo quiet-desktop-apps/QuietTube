@@ -227,11 +227,39 @@ Opening the help itself makes no network requests and does not launch a browser.
 The browser link includes the saved playback time. Watching there does not advance
 QuietTube's queue or synchronize its resume position; the queue remains intact.
 
-There is no automatic browser-cookie fallback or retry loop. Waiting before a
-manual retry may help a temporary restriction, but QuietTube cannot guarantee it.
+There is no automatic browser-cookie import or repeated retry loop. Waiting before
+a manual retry may help a temporary restriction, but QuietTube cannot guarantee it.
 You can explicitly add the separate playback connection below without changing
 your account feed mode. Google sign-in for account feeds is available near the top
 of the account dialog when OAuth is selected.
+
+### Video starts minutes ahead or cannot seek back
+
+An HLS stream can reject its opening segments while mpv silently skips to a later
+part. This is different from resuming a video you previously paused. QuietTube
+now stops a stream when FFmpeg explicitly reports discarding a segment, before
+accepting subsequent progress or completion from that stream.
+
+If loading failed before playback started and the attempt used a saved website
+session, QuietTube makes **one fresh attempt without playback cookies** at the
+same position. Cookie-free playback worked for the reported
+video; it is not guaranteed for every video. A public stream may still be blocked,
+or the video may require authentication. A second failure opens the usual recovery
+options without consuming the queue item. Account connections and history-sharing
+preferences are unchanged; enabled history sharing still uses its saved session
+independently. The next video uses the normal playback connection again.
+
+Use **Start over** (the rewind icon beside Reload in the bottom player controls)
+to discard the current resume point and request fresh streams from the beginning.
+For live streams this requests the available live edge, not an unavailable start.
+**Reload** keeps the current position. Neither action advances the queue.
+
+After playback has started, a missing segment stops playback for manual recovery
+instead of automatically interrupting a paused or playing video with a new stream.
+Segment-discard detection depends on FFmpeg's diagnostic wording. Generic 403,
+network or decoder warnings alone do not trigger this recovery. Logs retain only
+the fixed `segments` error category and whether a start used a session, never raw
+media URLs or cookies.
 
 ### Connect playback while keeping personal OAuth
 

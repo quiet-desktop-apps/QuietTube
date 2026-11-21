@@ -3,6 +3,42 @@
 Verified on 7 November 2026 on this Linux workstation. The historical playback checks below predate the independent public repository.
 No binary packages for other distributions were produced by these checks.
 
+## Missing opening segments — 21 November 2026
+
+Read-only diagnostics showed a requested start of zero, repeated HTTP 403
+warnings and actual playback near 191 seconds. Seeking to zero returned to the
+same later portion. Metadata identified a normal on-demand video, not a live
+stream. Separate silent mpv probes reproduced the jump with a temporary copy of
+the saved session, including after fresh extraction and with HTTP range/persistent
+connections disabled. A public attempt without cookies advanced from zero and
+could seek back to zero. These observations implicate unavailable segments in the
+session-backed stream; they do not establish why YouTube rejected them.
+
+The player now treats FFmpeg's explicit segment-discard diagnostic as an integrity
+failure, stops consuming events from that stream, and reports a fixed safe error.
+A session-backed failure before file-loaded gets one cookie-free attempt at the
+requested position. Failure after loading requires manual recovery, preserving
+paused playback rather than automatically restarting it. Generic 403 warnings do
+not trigger a retry. Stream starts log only a boolean indicating session use.
+Account/history configuration and memory limits are unchanged. A normal transport
+control now offers Start over without advancing or duplicating the queue item.
+
+The full suite passed **258 tests with 89% coverage**. Real mpv/FFmpeg tests serve
+synthetic HLS with rejected opening segments, verify that skipped timestamps never
+reach history observations, and exercise successful public recovery and preserved
+failure. Additional tests cover one-retry bounds, provisional zero positions,
+stale terminal events, paused failures, next-item authentication and the GTK
+Start over control. The warning wording was also checked against FFmpeg 6.1
+source, corresponding to the CI platform's FFmpeg generation. Wording remains
+an upstream compatibility limitation.
+
+A later isolated check with the modified player loaded at zero and sought back
+successfully, but the session stream had recovered by then and did not trigger
+fallback. Therefore end-to-end automatic fallback is verified with controlled
+synthetic media; live cookie-free playback and live normal seeking were verified
+separately. No actual queue, current player, history or account settings were
+modified by the manual probes. No private media identifiers or URLs are recorded.
+
 
 ## History session recovery — 20 November 2026
 
