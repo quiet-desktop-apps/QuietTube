@@ -18,9 +18,9 @@ class PlaybackLog:
     NUMBERS = {"position", "height", "time-pos", "duration", "audio-pts", "avsync",
                "decoder-frame-drop-count", "frame-drop-count", "demuxer-cache-duration",
                "pause_seconds", "exit_code"}
-    FLAGS = {"pause", "seeking", "paused-for-cache"}
+    FLAGS = {"pause", "seeking", "paused-for-cache", "session_playback"}
     ENUMS = {
-        "category": {"unknown", "forbidden", "limited", "account", "verification", "network", "format", "stream", "metadata", "decode"},
+        "category": {"unknown", "forbidden", "limited", "account", "verification", "network", "format", "stream", "metadata", "decode", "segments"},
         "video-codec": {"vp9", "h264", "av1", "hevc", "other"},
         "hwdec-current": {"no", "vaapi", "vaapi-copy", "vulkan", "vulkan-copy", "nvdec", "nvdec-copy", "other"},
         "current-vo": {"gpu", "gpu-next", "x11", "null", "other"},

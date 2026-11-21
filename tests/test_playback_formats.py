@@ -76,6 +76,18 @@ def test_repeated_logs_retain_only_category_and_do_not_hide_specific_error():
     assert vars(diagnostics) == {"category": "forbidden"}
 
 
+@pytest.mark.parametrize("prefix,message,discarded", [
+    ("ffmpeg/demuxer", "[hls @ 0x123] Segment 0 of playlist 0 failed too many times, skipping", True),
+    ("ffmpeg", "Segment 32 of playlist 1 failed too many times, skipping", True),
+    ("ffmpeg", "HTTP error 403 Forbidden", False),
+    ("ffmpeg", "Failed to open segment 0 of playlist 0", False),
+    ("ffmpeg", "Segment 0 of playlist 0 failed; retrying", False),
+    ("ytdl_hook", "Segment 0 of playlist 0 failed too many times, skipping", False),
+])
+def test_only_explicit_ffmpeg_segment_discard_is_an_integrity_failure(prefix, message, discarded):
+    assert PlaybackDiagnostics.segment_discarded(prefix, message) == discarded
+
+
 @pytest.mark.parametrize('message', [
     "Sign in to confirm you're not a bot. Use --cookies-from-browser.",
     'Sign in to confirm you’re not a bot. Authentication required.',

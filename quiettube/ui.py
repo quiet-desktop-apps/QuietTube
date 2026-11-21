@@ -306,6 +306,10 @@ class MainWindow(Gtk.ApplicationWindow):
         self.reload_video_button.update_property([Gtk.AccessibleProperty.LABEL], ["Reload video"])
         self.reload_video_button.connect("clicked", lambda *_: self.reload_video())
         transport.append(self.reload_video_button)
+        self.start_over_button = Gtk.Button(icon_name="media-seek-backward-symbolic", tooltip_text="Start over: load fresh streams from the beginning (live edge for live video)")
+        self.start_over_button.update_property([Gtk.AccessibleProperty.LABEL], ["Start over"])
+        self.start_over_button.connect("clicked", lambda *_: self.start_over())
+        transport.append(self.start_over_button)
         self.volume = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
         self.volume.set_value(self.controller.volume)
         self.volume.set_size_request(85, -1)
@@ -916,6 +920,11 @@ class MainWindow(Gtk.ApplicationWindow):
             self.controller.reload()
             self.set_status("Reloading fresh video and audio streams at your saved position…")
 
+    def start_over(self):
+        if not self.demo and self.controller.queue.current:
+            self.controller.restart_current()
+            self.set_status("Starting over with fresh video and audio streams…")
+
     def skip(self):
         if not self.demo:
             self.controller.next()
@@ -950,7 +959,8 @@ class MainWindow(Gtk.ApplicationWindow):
         if self.controller.error:
             self.set_status(self.controller.error, True)
         elif self.controller.state == "loading" and current:
-            self.set_status(f"Opening: {current.video.title}")
+            action = "Retrying without playback cookies" if self.controller.public_retry else "Opening"
+            self.set_status(f"{action}: {current.video.title}")
         signature = tuple(item.key for item in queue.upcoming)
         if signature != self.queue_signature:
             selected = self.last_selected

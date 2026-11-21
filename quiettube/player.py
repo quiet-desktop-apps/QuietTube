@@ -41,11 +41,13 @@ def playback_format(height: int) -> str:
 class PlaybackDiagnostics:
     """Retain only a fixed error category, never raw logs or signed media URLs.
 
-    Log wording is best-effort diagnostic context, not a playback/queue signal.
-    Only mpv's structured end-file event decides failure or completion.
+    Generic warnings are context only. An explicit HLS segment-discard warning
+    is an integrity failure: stop before skipped content becomes watch progress.
+    Only structured end-file events can signal completion.
     """
 
     MESSAGES = {
+        "segments": "The stream skipped unavailable video segments. Playback stopped to avoid missing part of the video. Try Start over or another quality.",
         "forbidden": "YouTube rejected the media stream (HTTP 403). Try Play again for a fresh stream.",
         "limited": "YouTube is limiting requests (HTTP 429). Wait a few minutes before retrying.",
         "account": "YouTube requires a website session for this video. See Playback help for connection options.",
@@ -60,6 +62,14 @@ class PlaybackDiagnostics:
 
     def __init__(self):
         self.category = "unknown"
+
+    @staticmethod
+    def segment_discarded(prefix: str, message: str) -> bool:
+        # FFmpeg wording is not a stable API; keep this deliberately narrow.
+        # HTTP 403 alone can concern an optional request and is not sufficient.
+        return prefix.startswith("ffmpeg") and bool(re.search(
+            r"\bSegment \d+ of playlist \d+ failed too many times, skipping\b",
+            message[:16_384], re.IGNORECASE))
 
     def observe(self, message: str):
         # Higher-priority errors are not overwritten by generic follow-up logs.
@@ -149,7 +159,8 @@ class MpvPlayer:
               session: Path | None = None, extra_args: list[str] | None = None) -> int:
         self.stop()
         generation = self.generation
-        self._log("start", generation, position=position, height=height)
+        self._log("start", generation, position=position, height=height,
+                  session_playback=bool(session and session.is_file()))
         self.temp = tempfile.TemporaryDirectory(prefix="quiettube-player-")
         socket_path = str(Path(self.temp.name) / "mpv.sock")
         private_session = None
@@ -249,6 +260,13 @@ class MpvPlayer:
                         if not pending_snapshot:
                             self._log("snapshot", generation, **snapshot)
                     if name == "log-message":
+                        if diagnostics.segment_discarded(str(event.get("prefix", "")), str(event.get("text", ""))):
+                            # Do not process subsequent progress/EOF from this
+                            # damaged stream, even if buffered in the same read.
+                            self.command(["set_property", "pause", True])
+                            self._emit(generation, "error", PlaybackDiagnostics.MESSAGES["segments"]
+                                       + " Your video, position and queue are preserved.", "segments")
+                            return
                         category = diagnostics.observe(str(event.get("text", "")))
                         now = time.monotonic()
                         if category != last_warning or now - warning_at >= 10:

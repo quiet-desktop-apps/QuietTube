@@ -285,3 +285,64 @@ def test_explicit_restart_discards_only_current_resume_point(tmp_path):
     controller.event(PlayerEvent(old_generation, 'error', 'Stale failure'))
     assert controller.state == 'loading'
     controller.close(); store.close()
+
+
+def test_missing_segments_retry_public_once_without_changing_account_or_queue(tmp_path):
+    store, player, controller = build(tmp_path)
+    store.cookie_path.write_text("synthetic session")
+    controller.queue.current.position = 42
+    controller.reload()
+    assert player.starts[-1][3] == store.cookie_path
+    before = controller.queue.to_dict()
+    old_generation = player.generation
+    controller.event(PlayerEvent(old_generation, "time-pos", 0))
+    controller.event(PlayerEvent(old_generation, "error", "Missing segment", "segments"))
+    assert controller.state == "loading"
+    assert player.starts[-1][1] == 42
+    assert player.starts[-1][3] is None
+    assert controller.queue.to_dict() == before
+    assert store.cookie_path.read_text() == "synthetic session"
+    controller.event(PlayerEvent(old_generation, "time-pos", 190))
+    controller.event(PlayerEvent(old_generation, "finished"))
+    assert controller.queue.to_dict() == before
+    starts = len(player.starts)
+    controller.event(PlayerEvent(player.generation, "error", "Missing again", "segments"))
+    assert controller.state == "error"
+    assert len(player.starts) == starts
+    assert store.load_queue().to_dict() == before
+    assert not store.completed_ids()
+    controller.close(); store.close()
+
+
+def test_public_stream_failure_does_not_retry_and_next_item_uses_saved_session(tmp_path):
+    store, player, controller = build(tmp_path)
+    starts = len(player.starts)
+    controller.event(PlayerEvent(player.generation, "error", "Missing segment", "segments"))
+    assert controller.state == "error"
+    assert len(player.starts) == starts
+    store.cookie_path.write_text("synthetic session")
+    controller.reload()
+    controller.event(PlayerEvent(player.generation, "error", "Missing segment", "segments"))
+    assert player.starts[-1][3] is None
+    controller.event(PlayerEvent(player.generation, "loaded"))
+    controller.event(PlayerEvent(player.generation, "time-pos", 1.5))
+    controller.event(PlayerEvent(player.generation, "finished"))
+    assert controller.queue.current.video == video(2)
+    assert player.starts[-1][3] == store.cookie_path
+    controller.close(); store.close()
+
+
+def test_segment_failure_after_pause_preserves_position_without_automatic_restart(tmp_path):
+    store, player, controller = build(tmp_path)
+    store.cookie_path.write_text("synthetic session")
+    controller.reload()
+    controller.event(PlayerEvent(player.generation, "loaded"))
+    controller.event(PlayerEvent(player.generation, "time-pos", 123))
+    controller.event(PlayerEvent(player.generation, "pause", True))
+    starts = len(player.starts)
+    controller.event(PlayerEvent(player.generation, "error", "Missing segment", "segments"))
+    assert len(player.starts) == starts
+    assert controller.state == "error"
+    assert controller.queue.current.position == 123
+    assert not store.completed_ids()
+    controller.close(); store.close()

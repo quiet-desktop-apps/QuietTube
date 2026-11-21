@@ -18,6 +18,10 @@ class PlaybackController:
         self.error = ""
         self.error_category = ""
         self.duration = 0.0
+        self._session_playback = False
+        self._loaded = False
+        self._load_position = 0.0
+        self.public_retry = False
         self.height = store.get("quality", 720)
         if self.height not in {480, 720, 1080, 1440, 2160}:
             self.height = 720
@@ -76,10 +80,12 @@ class PlaybackController:
                 self.queue.advance()
             self._start()
 
-    def _start(self):
+    def _start(self, *, public=False):
+        self.public_retry = public
         self.error = ""
         self.error_category = ""
         self.duration = 0
+        self._loaded = False
         self.save()
         if not self.queue.current:
             self.player.stop()
@@ -87,7 +93,9 @@ class PlaybackController:
         else:
             self.state = "loading"
             item = self.queue.current
-            session = self.store.playback_session()
+            self._load_position = item.position
+            session = None if public else self.store.playback_session()
+            self._session_playback = bool(session and session.is_file())
             self.observation("start")
             self.player.start(item.video.url, item.position, self.height, session)
         self.changed()
@@ -116,6 +124,7 @@ class PlaybackController:
         elif event.kind == "duration":
             self.duration = finite_seconds(event.value)
         elif event.kind == "loaded":
+            self._loaded = True
             self.state = "playing"
             self.observation("loaded")
             self.player.command(["set_property", "volume", self.volume])
@@ -127,6 +136,17 @@ class PlaybackController:
             self.next(completed=True)
             return
         elif event.kind == "error":
+            if event.category == "segments" and not self._loaded:
+                # mpv can report a provisional zero while probing the manifest.
+                # Retry the requested position, not that initialization value.
+                self.queue.current.position = self._load_position
+            if event.category == "segments" and self._session_playback and not self._loaded:
+                # Some authenticated HLS manifests reject opening fragments
+                # while the public stream works. One fresh cookie-free attempt;
+                # account/history sessions and the queue remain unchanged.
+                self.observation("boundary")
+                self._start(public=True)
+                return
             self.observation("boundary")
             self.player.stop()
             self.state = "error"
