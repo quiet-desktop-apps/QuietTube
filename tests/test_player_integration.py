@@ -327,6 +327,61 @@ def queued_player(tmp_path, clip):
     return store, player, controller, seen, pump_until
 
 
+def test_real_http_403_start_recovers_public_at_saved_position(clip, tmp_path):
+    class Forbidden(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_error(403)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Forbidden)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    events = SimpleQueue()
+
+    class LocalPlayer(MpvPlayer):
+        def start(self, url, position=0, height=720, session=None):
+            source = f"http://127.0.0.1:{server.server_port}/rejected" if session else str(clip)
+            return super().start(source, position, height,
+                                 extra_args=["--vo=null", "--ao=null", "--force-window=no", "--ytdl=no"])
+
+    store = Store(tmp_path / "store")
+    store.cookie_path.write_text("synthetic session")
+    player = LocalPlayer(events.put)
+    controller = PlaybackController(store, player)
+    controller.add(Video("11111111111", "Synthetic clip"))
+    controller.add(Video("22222222222", "Next item"))
+    controller.queue.advance()
+    controller.queue.current.position = 0.5
+    key = controller.queue.current.key
+    seen = []
+    try:
+        controller.play()
+
+        def pump():
+            while not events.empty():
+                event = events.get()
+                seen.append(event)
+                controller.event(event)
+            return controller.state == "playing" and controller.queue.current.position >= 0.6
+
+        wait_for(pump)
+        assert [e.category for e in seen if e.kind == "error"] == ["forbidden"]
+        assert not any(e.kind in {"finished", "dismissed"} for e in seen)
+        assert controller.public_retry
+        assert controller.queue.current.key == key
+        assert controller.queue.upcoming[0].video.id == "22222222222"
+        assert not store.completed_ids()
+        assert store.cookie_path.read_text() == "synthetic session"
+    finally:
+        controller.close()
+        store.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 def test_real_queue_plays_two_consecutive_videos(clip, tmp_path):
     store, player, controller, seen, pump = queued_player(tmp_path, clip)
     try:

@@ -3,6 +3,45 @@
 Verified on 7 November 2026 on this Linux workstation. The historical playback checks below predate the independent public repository.
 No binary packages for other distributions were produced by these checks.
 
+## Missing formats and automatic startup recovery — 25 November 2026
+
+The latest local attempts failed before file-loaded with the fixed `format`
+category, including after session replacement and app restart. The selected
+account mode was browser-session, so playback used the account session, not the
+separate session saved for OAuth playback. No private identifiers are recorded.
+
+Isolated silent playback with yt-dlp 2026.10.26 reproduced the format failure
+with a temporary copy of the active session. The same video loaded and advanced
+without playback cookies. After installing yt-dlp 2026.11.23, both the existing
+session and public attempts loaded and advanced. Neither browser launch nor
+session refresh was needed. This supports extractor incompatibility rather than
+expired cookies as the cause of this report. The upstream
+[release notes](https://github.com/yt-dlp/yt-dlp/releases/tag/2026.11.23) include
+YouTube player-client and signature timestamp changes; the checks do not isolate
+which upstream change restored this video. Both dependency pins were updated.
+
+The one-time public retry now also handles no-format and HTTP 403 startup failures.
+It retains position/quality and stops on a second failure. Verification challenges,
+rate limits, unrelated errors and failures after loading do not trigger retries.
+Playback help now reconnects the active account mode's session rather than always
+opening the separate OAuth playback connection. The transport identifies public
+playback; account feeds and optional history reporting keep their configured
+sessions. Memory limits and single-player ownership are unchanged.
+
+Validation: `./test.sh` passed **273 tests with 89% coverage** against the updated
+extractor. Coverage includes synthetic failures in both account modes, one-retry
+bounds, stale events, requested positions, no automatic restart after pause,
+correct reconnect routing and the visible public-stream state. A real mpv/local
+HTTP integration test rejects the session route with 403 and verifies recovery
+through a working public route at the saved position without advancing the queue.
+Automated tests use synthetic media/sessions only.
+
+Manual probes used disposable session copies and no controller/history sender.
+The real queue, sessions, history and running application were not changed by
+those probes. The updated dependency is installed locally; the new controller/UI
+code is loaded when the application restarts. No automatic browser launch/tab
+closure or software-update service was introduced.
+
 ## Missing opening segments — 21 November 2026
 
 Read-only diagnostics showed a requested start of zero, repeated HTTP 403

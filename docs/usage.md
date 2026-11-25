@@ -233,6 +233,37 @@ You can explicitly add the separate playback connection below without changing
 your account feed mode. Google sign-in for account feeds is available near the top
 of the account dialog when OAuth is selected.
 
+### Automatic recovery before opening a browser
+
+Not every playback failure means the session expired. On 25 November 2026, the
+saved-session extractor returned no playable format while the public stream
+worked. Updating to the pinned yt-dlp 2026.11.23 release restored playback with
+the same saved session; no browser launch or cookie replacement was needed.
+
+For a saved-session attempt that fails **before loading** with no playable
+format, HTTP 403, or discarded HLS segments, QuietTube retries once without
+playback cookies, at the requested position and quality. The status shows
+**Retrying without playback cookies**, then **Public stream** during playback.
+History sharing and account feeds keep using their configured account sessions.
+The retry does not consume the queue item, and a second failure stops for manual
+recovery. Rate limits, verification challenges, network errors and failures after
+loading do not trigger this retry.
+
+Keep the extractor current with `./setup.sh` after obtaining the latest QuietTube
+changes; it installs the reviewed version pinned by this project. The app does not
+silently install arbitrary new software releases.
+
+If a website session really needs reconnecting, **Connect / reconnect playback**
+in Playback help opens the active session's settings: the browser account in
+browser-session mode, or the separate playback connection in personal OAuth mode.
+The separate playback session is not used in browser-session account mode.
+
+QuietTube does not currently automate opening a browser, waiting for sign-in,
+capturing cookies and closing its tab. Such a flow would still need your help
+when Google asks for sign-in or verification. It must also distinguish a tab it
+opened from your existing tabs. For this reported failure, browser automation
+would not fix the extractor incompatibility; the update and bounded retry address it.
+
 ### Video starts minutes ahead or cannot seek back
 
 An HLS stream can reject its opening segments while mpv silently skips to a later

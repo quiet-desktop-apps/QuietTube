@@ -8,6 +8,8 @@ from .history_sync import PlaybackObservation
 class PlaybackController:
     """Owns queue transitions. EOF or explicit player dismissal advances; faults preserve the item."""
 
+    PUBLIC_RETRY_ERRORS = frozenset({"segments", "format", "forbidden"})
+
     def __init__(self, store, player, changed=lambda: None, observe=lambda event: None):
         self.store = store
         self.player = player
@@ -136,13 +138,13 @@ class PlaybackController:
             self.next(completed=True)
             return
         elif event.kind == "error":
-            if event.category == "segments" and not self._loaded:
+            if event.category in self.PUBLIC_RETRY_ERRORS and not self._loaded:
                 # mpv can report a provisional zero while probing the manifest.
                 # Retry the requested position, not that initialization value.
                 self.queue.current.position = self._load_position
-            if event.category == "segments" and self._session_playback and not self._loaded:
-                # Some authenticated HLS manifests reject opening fragments
-                # while the public stream works. One fresh cookie-free attempt;
+            if event.category in self.PUBLIC_RETRY_ERRORS and self._session_playback and not self._loaded:
+                # Session-backed extraction can return missing/rejected formats
+                # while public playback works. One fresh cookie-free attempt;
                 # account/history sessions and the queue remain unchanged.
                 self.observation("boundary")
                 self._start(public=True)

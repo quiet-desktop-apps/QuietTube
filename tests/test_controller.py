@@ -1,3 +1,5 @@
+import pytest
+
 from quiettube.controller import PlaybackController
 from quiettube.player import PlayerEvent
 from quiettube.storage import Store
@@ -287,26 +289,36 @@ def test_explicit_restart_discards_only_current_resume_point(tmp_path):
     controller.close(); store.close()
 
 
-def test_missing_segments_retry_public_once_without_changing_account_or_queue(tmp_path):
+@pytest.mark.parametrize("category", ["segments", "format", "forbidden"])
+@pytest.mark.parametrize("mode", ["browser", "oauth"])
+def test_recoverable_start_error_retries_public_once_without_changing_account_or_queue(tmp_path, category, mode):
     store, player, controller = build(tmp_path)
-    store.cookie_path.write_text("synthetic session")
+    store.set("account_mode", mode)
+    store.set("playback_session_enabled", True)
+    store.set("share_watch_history", True)
+    store.cookie_path.write_text("synthetic feed session")
+    session = store.playback_session()
+    session.write_text("synthetic session")
     controller.queue.current.position = 42
     controller.reload()
-    assert player.starts[-1][3] == store.cookie_path
+    assert player.starts[-1][3] == session
     before = controller.queue.to_dict()
     old_generation = player.generation
     controller.event(PlayerEvent(old_generation, "time-pos", 0))
-    controller.event(PlayerEvent(old_generation, "error", "Missing segment", "segments"))
+    controller.event(PlayerEvent(old_generation, "error", "Unavailable stream", category))
     assert controller.state == "loading"
     assert player.starts[-1][1] == 42
     assert player.starts[-1][3] is None
     assert controller.queue.to_dict() == before
-    assert store.cookie_path.read_text() == "synthetic session"
+    assert session.read_text() == "synthetic session"
+    assert store.get("account_mode") == mode
+    assert store.get("share_watch_history") is True
+    assert player.starts[-1][2] == 720
     controller.event(PlayerEvent(old_generation, "time-pos", 190))
     controller.event(PlayerEvent(old_generation, "finished"))
     assert controller.queue.to_dict() == before
     starts = len(player.starts)
-    controller.event(PlayerEvent(player.generation, "error", "Missing again", "segments"))
+    controller.event(PlayerEvent(player.generation, "error", "Unavailable again", category))
     assert controller.state == "error"
     assert len(player.starts) == starts
     assert store.load_queue().to_dict() == before
@@ -332,7 +344,8 @@ def test_public_stream_failure_does_not_retry_and_next_item_uses_saved_session(t
     controller.close(); store.close()
 
 
-def test_segment_failure_after_pause_preserves_position_without_automatic_restart(tmp_path):
+@pytest.mark.parametrize("category", ["segments", "format", "forbidden"])
+def test_failure_after_pause_preserves_position_without_automatic_restart(tmp_path, category):
     store, player, controller = build(tmp_path)
     store.cookie_path.write_text("synthetic session")
     controller.reload()
@@ -340,9 +353,25 @@ def test_segment_failure_after_pause_preserves_position_without_automatic_restar
     controller.event(PlayerEvent(player.generation, "time-pos", 123))
     controller.event(PlayerEvent(player.generation, "pause", True))
     starts = len(player.starts)
-    controller.event(PlayerEvent(player.generation, "error", "Missing segment", "segments"))
+    controller.event(PlayerEvent(player.generation, "error", "Unavailable stream", category))
     assert len(player.starts) == starts
     assert controller.state == "error"
     assert controller.queue.current.position == 123
     assert not store.completed_ids()
+    controller.close(); store.close()
+
+
+@pytest.mark.parametrize("category", ["limited", "verification", "account", "network", "unknown"])
+def test_other_failures_with_saved_session_do_not_trigger_automatic_retries(tmp_path, category):
+    store, player, controller = build(tmp_path)
+    store.cookie_path.write_text("synthetic session")
+    controller.queue.current.position = 38
+    controller.reload()
+    before = controller.queue.to_dict()
+    starts = len(player.starts)
+    controller.event(PlayerEvent(player.generation, "error", "Unavailable", category))
+    assert len(player.starts) == starts
+    assert controller.state == "error"
+    assert controller.queue.to_dict() == before
+    assert controller.error_category == category
     controller.close(); store.close()

@@ -53,7 +53,7 @@ class PlaybackDiagnostics:
         "account": "YouTube requires a website session for this video. See Playback help for connection options.",
         "verification": "YouTube blocked playback with a browser-verification challenge. Signing in with Google OAuth again will not resolve it. See Playback help.",
         "network": "The media server could not be reached. Check your connection and retry.",
-        "format": "No playable stream was available at this quality. Try another quality or update with setup.sh.",
+        "format": "YouTube returned no playable stream at this quality. This does not prove your session has expired. Try another quality or update the extractor with setup.sh.",
         "stream": "The selected video/audio stream could not be opened. A recently ended live stream may not be ready for playback. Retry later, or skip this video to continue the queue.",
         "metadata": "mpv could not read the video stream metadata. Retry, or skip this video to continue your queue.",
         "decode": "The video decoder reported a problem. Use Reload video to retry at your current position.",
