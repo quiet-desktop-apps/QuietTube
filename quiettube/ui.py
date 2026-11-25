@@ -947,7 +947,8 @@ class MainWindow(Gtk.ApplicationWindow):
         if current:
             position = duration_label(current.position) or "0:00"
             duration = duration_label(self.controller.duration or current.video.duration) or "—"
-            self.now_detail.set_text(f"{self.controller.state.capitalize()} · {position} / {duration} · {current.video.channel}")
+            source = " · Public stream" if self.controller.public_retry else ""
+            self.now_detail.set_text(f"{self.controller.state.capitalize()} · {position} / {duration} · {current.video.channel}{source}")
         else:
             self.now_detail.set_text("Playback opens in a lightweight mpv window.")
         self.play_button.set_label({"playing": "Pause", "paused": "Resume", "loading": "Loading…"}.get(self.controller.state, "Play"))
@@ -985,6 +986,10 @@ class MainWindow(Gtk.ApplicationWindow):
         self.playback_connection_button.set_label(
             "Playback session · saved" if self.store.get("playback_session_enabled", False) and self.store.playback_cookie_path.exists()
             else "Connect playback")
+        self.playback_connection_button.set_tooltip_text(
+            "Separate playback session and history-sharing settings."
+            if self.oauth_mode() else
+            "Playback uses your YouTube account session. This dialog manages the separate OAuth playback session and history-sharing settings.")
         if self.oauth_mode():
             state = "connected" if self.oauth_verified else ("saved" if self.account_available() else "sign in needed")
             self.account_button.set_label("Personal OAuth · " + state)
@@ -1063,7 +1068,8 @@ class MainWindow(Gtk.ApplicationWindow):
             explanation = ("Playback uses your imported YouTube website session when one is saved. That session can expire, "
                            "and YouTube can still require browser verification. Reconnecting it is not a guaranteed fix.")
         content.append(label(explanation, "muted", True))
-        content.append(button("Connect / reconnect playback", self.open_playback_connection, "suggested-action"))
+        self.playback_reconnect_button = button("Connect / reconnect playback", self.reconnect_playback, "suggested-action")
+        content.append(self.playback_reconnect_button)
         content.append(label("Wait before retrying if YouTube asks for verification or limits requests. You can open this "
                              "video on YouTube at the saved position. Browser playback will not advance QuietTube's queue "
                              "or update its saved position.", "small", True))
@@ -1078,6 +1084,17 @@ class MainWindow(Gtk.ApplicationWindow):
         content.append(button("Copy video link", lambda: self.copy_link(item.video)))
         content.append(button("Close", dialog.close))
         dialog.present()
+
+    def reconnect_playback(self):
+        """Reconnect the session actually used by the selected account mode."""
+        if self.demo:
+            return
+        if self.playback_help_window:
+            self.playback_help_window.close()
+        if self.oauth_mode():
+            self.open_playback_connection()
+        else:
+            self.open_account()
 
     def quality_changed(self, *_):
         self.controller.height = [480, 720, 1080, 1440, 2160][self.quality.get_selected()]

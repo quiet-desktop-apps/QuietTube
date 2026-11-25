@@ -736,6 +736,45 @@ def test_failed_queue_offers_recovery_and_skip_does_not_requeue(window):
     assert not window.skip_failed_button.get_visible()
 
 
+def test_format_failure_recovers_without_dialog_and_displays_public_stream(window):
+    from quiettube.player import PlayerEvent
+    from quiettube.ui import DEMO_VIDEOS
+    from test_controller import FakePlayer
+    window.demo = False
+    window.player = window.controller.player = FakePlayer()
+    window.store.cookie_path.write_text("synthetic session")
+    window.controller.play_now(DEMO_VIDEOS[0])
+    before = window.controller.queue.to_dict()
+    window.on_player(PlayerEvent(window.player.generation, "error", "No format", "format"))
+    assert window.controller.state == "loading"
+    assert window.player.starts[-1][3] is None
+    assert window.playback_help_window is None
+    assert not window.playback_help_button.get_visible()
+    window.on_player(PlayerEvent(window.player.generation, "loaded"))
+    assert window.queue_play_button.get_label() == "Play queue"
+    assert "Public stream" in window.now_detail.get_text()
+    assert window.controller.queue.to_dict() == before
+
+
+def test_playback_help_reconnects_active_session_in_each_account_mode(window, monkeypatch):
+    from quiettube.player import PlayerEvent
+    from quiettube.ui import DEMO_VIDEOS
+    from test_controller import FakePlayer
+    window.demo = False
+    window.player = window.controller.player = FakePlayer()
+    opened = []
+    monkeypatch.setattr(window, "open_account", lambda: opened.append("account"))
+    monkeypatch.setattr(window, "open_playback_connection", lambda: opened.append("playback"))
+    for mode in ("browser", "oauth"):
+        window.store.set("account_mode", mode)
+        window.controller.play_now(DEMO_VIDEOS[0])
+        window.on_player(PlayerEvent(window.player.generation, "error", "Expired", "account"))
+        window.open_playback_help()
+        window.playback_reconnect_button.emit("clicked")
+        assert window.playback_help_window is None
+    assert opened == ["account", "playback"]
+
+
 def test_recovery_restart_and_stale_dialog_cannot_change_other_item(window):
     from quiettube.player import PlayerEvent
     from quiettube.ui import DEMO_VIDEOS
