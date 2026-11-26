@@ -270,6 +270,96 @@ def test_pause_stop_reload_and_app_shutdown_never_finish_current(tmp_path):
     store.close()
 
 
+@pytest.mark.parametrize("last_item", [False, True])
+def test_paused_close_retains_item_and_position_across_app_restart(tmp_path, last_item):
+    store, player, controller = build(tmp_path)
+    if last_item:
+        controller.queue.upcoming.clear()
+    observed = []
+    controller.observe = observed.append
+    controller.event(PlayerEvent(player.generation, "loaded"))
+    controller.event(PlayerEvent(player.generation, "time-pos", 765.5))
+    controller.event(PlayerEvent(player.generation, "pause", True))
+    before = controller.queue.to_dict()
+    starts = len(player.starts)
+    generation = player.generation
+    event = PlayerEvent(generation, "dismissed")
+    assert not controller.completes_current(event)
+    controller.event(event)
+    assert controller.state == "stopped"
+    assert controller.queue.to_dict() == before == store.load_queue().to_dict()
+    assert len(player.starts) == starts
+    assert not store.completed_ids()
+    assert observed[-1].kind == "boundary" and observed[-1].position == 765.5
+    assert not observed[-1].playing
+    for kind in ("finished", "dismissed", "closed", "time-pos"):
+        controller.event(PlayerEvent(generation, kind, 0))
+    assert controller.queue.to_dict() == before
+    controller.close(); store.close()
+    store = Store(tmp_path)
+    controller = PlaybackController(store, player)
+    assert controller.queue.to_dict() == before
+    controller.play()
+    assert len(player.starts) == starts + 1
+    assert player.starts[-1][1] == 765.5
+    assert controller.queue.to_dict() == before
+    controller.close(); store.close()
+
+
+def test_close_during_loading_retains_unplayed_item(tmp_path):
+    store, player, controller = build(tmp_path)
+    before = controller.queue.to_dict()
+    controller.event(PlayerEvent(player.generation, "dismissed"))
+    assert controller.state == "stopped"
+    assert controller.queue.to_dict() == before
+    assert not store.completed_ids()
+    controller.close(); store.close()
+
+
+def test_pause_before_loaded_is_retained_when_player_closes(tmp_path):
+    store, player, controller = build(tmp_path)
+    controller.event(PlayerEvent(player.generation, "pause", True))
+    controller.event(PlayerEvent(player.generation, "loaded"))
+    assert controller.state == "paused"
+    before = controller.queue.to_dict()
+    controller.event(PlayerEvent(player.generation, "dismissed"))
+    assert controller.queue.to_dict() == before
+    assert not store.completed_ids()
+    controller.play()
+    controller.event(PlayerEvent(player.generation, "loaded"))
+    assert controller.state == "playing"
+    controller.close(); store.close()
+
+
+@pytest.mark.parametrize("state", ["paused", "stopped", "error"])
+def test_remove_current_preserves_upcoming_without_autoplay_or_completion(tmp_path, state):
+    store, player, controller = build(tmp_path)
+    controller.event(PlayerEvent(player.generation, "loaded"))
+    controller.event(PlayerEvent(player.generation, "time-pos", 123))
+    controller.event(PlayerEvent(player.generation, "pause", True))
+    if state == "stopped":
+        controller.event(PlayerEvent(player.generation, "dismissed"))
+    elif state == "error":
+        controller.event(PlayerEvent(player.generation, "error", "Unavailable", "network"))
+    old_generation = player.generation
+    upcoming = [item.to_dict() for item in controller.queue.upcoming]
+    starts = len(player.starts)
+    controller.remove_current()
+    assert controller.queue.current is None
+    assert [item.to_dict() for item in controller.queue.upcoming] == upcoming
+    assert controller.state == "stopped" and controller.error == ""
+    assert not store.completed_ids()
+    assert store.db.execute("SELECT position, completed FROM history WHERE video_id=?", (video(1).id,)).fetchone() == (123, 0)
+    assert store.load_queue().to_dict() == controller.queue.to_dict()
+    controller.event(PlayerEvent(old_generation, "finished"))
+    controller.remove_current()  # no current item: no consumption of upcoming
+    assert len(player.starts) == starts
+    controller.play()
+    assert controller.queue.current.video == video(2)
+    assert player.starts[-1][1] == 0
+    controller.close(); store.close()
+
+
 def test_explicit_restart_discards_only_current_resume_point(tmp_path):
     store, player, controller = build(tmp_path)
     controller.event(PlayerEvent(player.generation, 'time-pos', 6569))

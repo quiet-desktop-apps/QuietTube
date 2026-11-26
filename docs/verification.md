@@ -3,6 +3,36 @@
 Verified on 7 November 2026 on this Linux workstation. The historical playback checks below predate the independent public repository.
 No binary packages for other distributions were produced by these checks.
 
+## Pause, close and resume later — 26 November 2026
+
+At the maintainer's request, closing mpv while paused now retains the current
+video and saved position instead of marking it completed or advancing. Closing
+during loading also retains it. EOF and explicit close while playing still finish
+the item locally and advance. A shared controller decision keeps watched-card
+filtering aligned with the queue transition. Pause events arriving before
+file-loaded are retained so that early pausing is respected too.
+
+The queue panel offers Resume current video when stopped with a retained item,
+and Remove current video for paused/stopped/failed items. Removal records actual
+partial progress, clears only the current item and leaves remaining items stopped.
+Stale events from the old player cannot complete or remove another item. Closing
+QuietTube persists the retained item; the next Play starts a new mpv process and
+extracts fresh streams at the requested position. No overnight player or added
+buffer is required.
+
+Tests cover retention across Store/controller restart, the final queued item,
+loading close, early pause, partial history, removal, stale terminal events and
+GTK controls. Real mpv checks exercise both `quit` and `CLOSE_WIN` after pause and
+seek, verify the stopped process and unchanged persisted queue, then reopen it.
+Close while playing and natural EOF retain their separate regression checks.
+All media and sessions used here are synthetic; no real queue, history, account
+or running player was changed. A 24-hour live YouTube pause was not performed.
+Fresh stream extraction avoids relying on an old idle stream, but does not promise
+continued account authorization or availability of a live stream's DVR window.
+
+Validation: `./test.sh` passed **283 tests with 89% coverage**, including real mpv,
+GTK/Xvfb, responsive card layout and bounded-memory checks.
+
 ## Missing formats and automatic startup recovery — 25 November 2026
 
 The latest local attempts failed before file-loaded with the fixed `format`
