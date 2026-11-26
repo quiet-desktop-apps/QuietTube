@@ -149,12 +149,19 @@ The feed descriptions below refer to browser-session mode unless stated otherwis
   another video at that position.
 - Select a queue row and use **↑ / ↓**, **Move to**, or **Remove** to edit it.
 - **Play queue:** starts the first item or resumes the current one.
-- **Close the mpv video window (or press q):** mark this item done locally and
+- **Close mpv while playing (or press q):** mark this item done locally and
   immediately play the next queued item. This also works for live streams; no
   end-of-stream event is needed. An empty queue stays stopped.
-- **Pause:** keep the current video and position to resume later.
+- **Pause, then close mpv:** keep the current video and position. No next video
+  starts and the item is not marked finished. Closing during loading also keeps it.
+  **Resume current video** opens a new player with freshly extracted streams at
+  the saved position, including after closing and reopening QuietTube.
+- **Remove current video:** available for a paused, stopped or failed item in the
+  queue panel. Removes that item without marking it completed or playing the next
+  one. Press **Play queue** when ready to start the remaining items. Actual viewing
+  progress stays in local history; removing it does not erase YouTube history.
 - **Stop in QuietTube / close the QuietTube app:** retain the item and position
-  for later; these are different from closing the mpv video window.
+  for later, just like pausing before closing mpv.
 - **Next:** skips the current video. Playback errors preserve the current item;
   they never silently skip the queue.
 - **Find similar videos:** searches by the video's title. These are topic search
@@ -193,9 +200,14 @@ If audio continues but the picture freezes, use **Reload video** (the circular
 arrow beside the quality selector). It opens fresh streams at the current saved
 position without moving or duplicating queue entries. Choosing **Play now** for
 the current video also retains its position. Pause saves the position immediately.
-Closing mpv means done watching and advances the queue; use Pause or QuietTube
-Stop when you intend to return to this video. A player crash or control-connection
-loss preserves the item. Only an explicit mpv quit event is treated as dismissal.
+For a long break, pause first, then close mpv. This releases its buffers and keeps
+the current item for later. Resume opens fresh streams instead of relying on a
+player connection left idle overnight. Closing while playing still means done
+watching and advances the queue. A player crash or control-connection loss also
+preserves the item. Only an explicit mpv quit event while playing completes it.
+Saved positions do not expire locally, but YouTube may remove a video, require a
+fresh login or change its streaming service. Live streams may no longer expose
+the same DVR position after a long break; an exact live resume is not guaranteed.
 Marking an item done locally does not claim its full duration was watched on
 YouTube: optional history sharing still sends only the actual playback position.
 The resolution selector is a maximum and applies to the next playback start;

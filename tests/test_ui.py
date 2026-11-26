@@ -163,6 +163,7 @@ def test_completion_hides_video_but_errors_and_stale_events_do_not(window, compl
     assert window.videos == [first, second]
     assert window.store.completed_ids() == set()
     window.controller.play()
+    window.on_player(PlayerEvent(player.generation, "loaded"))
     window.on_player(PlayerEvent(player.generation, completion))
     assert window.videos == [second]
     assert window.store.completed_ids() == {first.id}
@@ -798,6 +799,41 @@ def test_recovery_restart_and_stale_dialog_cannot_change_other_item(window):
     stale.emit('clicked')
     assert window.controller.queue.to_dict() == before
     assert len(window.player.starts) == starts
+
+
+def test_paused_close_exposes_resume_and_explicit_remove_without_advancing(window):
+    from quiettube.player import PlayerEvent
+    from quiettube.ui import DEMO_VIDEOS
+    from test_controller import FakePlayer
+    window.demo = False
+    window.player = window.controller.player = FakePlayer()
+    window.controller.queue.current = None
+    window.controller.queue.upcoming.clear()
+    window.controller.add(DEMO_VIDEOS[0])
+    window.controller.add(DEMO_VIDEOS[1])
+    window.play()
+    window.on_player(PlayerEvent(window.player.generation, "loaded"))
+    assert not window.remove_current_button.get_visible()
+    window.on_player(PlayerEvent(window.player.generation, "time-pos", 95))
+    window.on_player(PlayerEvent(window.player.generation, "pause", True))
+    assert window.remove_current_button.get_visible()
+    window.on_player(PlayerEvent(window.player.generation, "dismissed"))
+    assert window.queue_play_button.get_label() == "Resume current video"
+    assert window.controller.queue.current.video == DEMO_VIDEOS[0]
+    assert not window.store.completed_ids()
+    window.queue_play_button.emit("clicked")
+    assert window.player.starts[-1][1] == 95
+    window.on_player(PlayerEvent(window.player.generation, "loaded"))
+    window.on_player(PlayerEvent(window.player.generation, "pause", True))
+    window.on_player(PlayerEvent(window.player.generation, "dismissed"))
+    starts = len(window.player.starts)
+    window.remove_current_button.emit("clicked")
+    assert len(window.player.starts) == starts
+    assert window.controller.queue.current is None
+    assert window.controller.queue.upcoming[0].video == DEMO_VIDEOS[1]
+    assert not window.remove_current_button.get_visible()
+    assert window.queue_play_button.get_label() == "Play queue"
+    assert not window.store.completed_ids()
 
 
 def test_history_connection_error_is_visible_and_routes_active_session(window, monkeypatch):

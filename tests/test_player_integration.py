@@ -490,6 +490,36 @@ def test_real_mpv_crash_keeps_current_queue_item(clip, tmp_path):
         controller.close(); store.close()
 
 
+@pytest.mark.parametrize("command", [["quit"], ["keypress", "CLOSE_WIN"]])
+def test_real_paused_close_retains_queue_and_reopens_at_saved_position(clip, tmp_path, command):
+    store, player, controller, seen, pump = queued_player(tmp_path, clip)
+    try:
+        controller.add(Video("11111111111", "Pause and resume"))
+        controller.add(Video("22222222222", "Next clip"))
+        controller.play()
+        pump(lambda: controller.state == "playing")
+        assert player.command(["set_property", "pause", True])
+        pump(lambda: controller.state == "paused")
+        assert player.command(["seek", 0.4, "absolute+exact"])
+        pump(lambda: controller.queue.current.position >= 0.35)
+        before = controller.queue.to_dict()
+        process = player.process
+        first_generation = player.generation
+        assert player.command(command)
+        pump(lambda: controller.state == "stopped")
+        assert process.poll() is not None
+        assert controller.queue.to_dict() == before == store.load_queue().to_dict()
+        assert not store.completed_ids()
+        assert sum(e.kind == "dismissed" for e in seen) == 1
+        controller.play()
+        pump(lambda: controller.state == "playing" and controller.queue.current.position >= 0.35)
+        assert player.generation != first_generation
+        assert controller.queue.current.key == before["current"]["key"]
+        assert controller.queue.upcoming[0].video.id == "22222222222"
+    finally:
+        controller.close(); store.close()
+
+
 def test_real_mpv_close_advances_to_next_video_without_returning(clip, tmp_path):
     store, player, controller, seen, pump = queued_player(tmp_path, clip)
     try:
@@ -497,8 +527,6 @@ def test_real_mpv_close_advances_to_next_video_without_returning(clip, tmp_path)
         controller.add(Video('22222222222', 'Next local video'))
         controller.play()
         pump(lambda: controller.state == 'playing')
-        player.command(['set_property', 'pause', True])
-        pump(lambda: controller.state == 'paused')
         first_generation = player.generation
         assert player.command(['quit'])
         pump(lambda: controller.queue.current is not None and controller.queue.current.video.id == '22222222222'

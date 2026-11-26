@@ -259,7 +259,12 @@ class MainWindow(Gtk.ApplicationWindow):
         queue_panel.append(position_row)
         self.queue_play_button = button("Play queue", self.play, "suggested-action")
         queue_panel.append(self.queue_play_button)
-        queue_panel.append(label("Close video: done & next. Pause to resume later.", "muted small", True))
+        self.remove_current_button = button("Remove current video", self.remove_current)
+        self.remove_current_button.set_tooltip_text("Remove the current video without marking it finished or starting the next one.")
+        queue_panel.append(self.remove_current_button)
+        self.queue_close_hint = label("Pause, then close: save for later. Close while playing: done & next.", "muted small", True)
+        self.queue_close_hint.set_max_width_chars(32)
+        queue_panel.append(self.queue_close_hint)
         queue_panel.append(label("Only the current video is buffered.", "muted small"))
 
         self.status = label("Ready", "status", True)
@@ -295,7 +300,7 @@ class MainWindow(Gtk.ApplicationWindow):
         transport.append(button("+10s", lambda: self.player.command(["seek", 10, "relative"])))
         transport.append(button("Next", self.skip))
         stop_button = button("Stop", self.controller.stop)
-        stop_button.set_tooltip_text("Stop and keep this video for later. Closing the mpv window finishes it and plays the next.")
+        stop_button.set_tooltip_text("Stop and keep this video for later. Pausing before closing mpv also saves it; closing while playing finishes it.")
         transport.append(stop_button)
         self.quality = Gtk.DropDown.new_from_strings(["480p", "720p", "1080p", "1440p", "2160p"])
         self.quality.set_selected([480, 720, 1080, 1440, 2160].index(self.controller.height))
@@ -929,10 +934,14 @@ class MainWindow(Gtk.ApplicationWindow):
         if not self.demo:
             self.controller.next()
 
+    def remove_current(self):
+        if not self.demo:
+            self.controller.remove_current()
+            self.set_status("Current video removed. Press Play queue when you want to start the next one.")
+
     def on_player(self, event):
         if not self.closed:
-            completed = (event.kind in {"finished", "dismissed"} and event.generation == self.player.generation
-                         and self.controller.queue.current is not None)
+            completed = self.controller.completes_current(event)
             self.controller.event(event)
             if completed:
                 self.show_videos(self.store.history() if self.feed == "history" else self.feed_videos)
@@ -956,7 +965,9 @@ class MainWindow(Gtk.ApplicationWindow):
         failed = self.controller.state == "error" and current is not None
         self.playback_help_button.set_visible(failed)
         self.skip_failed_button.set_visible(failed and bool(queue.upcoming))
-        self.queue_play_button.set_label("Resolve failed video" if failed else "Play queue")
+        retained = current is not None and self.controller.state == "stopped"
+        self.queue_play_button.set_label("Resolve failed video" if failed else "Resume current video" if retained else "Play queue")
+        self.remove_current_button.set_visible(current is not None and self.controller.state in {"paused", "stopped", "error"})
         if self.controller.error:
             self.set_status(self.controller.error, True)
         elif self.controller.state == "loading" and current:

@@ -36,7 +36,9 @@ a controlled Chromium comparison for QuietTube.** See [memory evidence](docs/mem
 - Browse Home, Subscriptions, Watch Later and Liked videos with your connected
   session; search public videos, open links and browse playlists.
 - Keep an editable queue: play now, add next, insert, reorder and remove.
-  Closing the mpv window marks the item done and plays the next; Pause keeps your place.
+  Pause then close mpv to keep your place and resume with fresh streams later.
+  Closing while playing marks the item done and plays the next. Remove current
+  video discards a paused/stopped item without starting the next one.
 - Save playback position locally; resume, seek, start over, reload a stalled stream and
   select a resolution ceiling (720p by default).
 - Optionally share actual playback positions with YouTube history through the

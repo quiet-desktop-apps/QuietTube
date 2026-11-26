@@ -8,9 +8,11 @@ in the Quiet organization. Run Git operations from this directory.
 - Never read the user's real cookies in tests. Use synthetic fixtures and
   temporary private directories. Never log session content or signed media URLs.
 - Preserve explicit worker/player completion messages and ignore stale results.
-  EOF and explicit mpv window close/quit advance the queue and mark the item
-  locally done. Player errors, unexpected disconnects, app Stop/reload and app
-  shutdown preserve the current item. Pause preserves position for later.
+  EOF and mpv window close/quit while playing advance the queue and mark the item
+  locally done. Closing mpv while paused or loading preserves the item and position.
+  Player errors, unexpected disconnects, app Stop/reload and app shutdown also
+  preserve the item. Explicit Remove current video leaves upcoming items stopped
+  and does not mark the removed video completed.
 - Keep feed, thumbnail, buffer, queue and history bounds explicit and tested.
 - Run `./test.sh` after behavioural changes. Tests include real mpv/GTK integration
   and need display/socket access (`xvfb-run` is suitable).

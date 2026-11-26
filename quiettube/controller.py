@@ -6,7 +6,7 @@ from .history_sync import PlaybackObservation
 
 
 class PlaybackController:
-    """Owns queue transitions. EOF or explicit player dismissal advances; faults preserve the item."""
+    """EOF or closing while playing advances; paused close and faults retain the item."""
 
     PUBLIC_RETRY_ERRORS = frozenset({"segments", "format", "forbidden"})
 
@@ -22,6 +22,7 @@ class PlaybackController:
         self.duration = 0.0
         self._session_playback = False
         self._loaded = False
+        self._paused = False
         self._load_position = 0.0
         self.public_retry = False
         self.height = store.get("quality", 720)
@@ -88,6 +89,7 @@ class PlaybackController:
         self.error_category = ""
         self.duration = 0
         self._loaded = False
+        self._paused = False
         self.save()
         if not self.queue.current:
             self.player.stop()
@@ -110,6 +112,26 @@ class PlaybackController:
         self.queue.advance()
         self._start()
 
+    def remove_current(self):
+        """Remove the retained item without starting or consuming the next one."""
+        if not self.queue.current:
+            return
+        self.observation("boundary")
+        item = self.queue.current
+        self.store.record(item.video, item.position, completed=False)
+        self.player.stop()
+        self.queue.current = None
+        self.state = "stopped"
+        self.error = self.error_category = ""
+        self.duration = 0
+        self.public_retry = False
+        self.save()
+        self.changed()
+
+    def completes_current(self, event: PlayerEvent):
+        return (event.generation == self.player.generation and self.queue.current is not None
+                and (event.kind == "finished" or (event.kind == "dismissed" and self.state == "playing")))
+
     def stop(self):
         self.observation("boundary")
         self.player.stop()
@@ -127,15 +149,22 @@ class PlaybackController:
             self.duration = finite_seconds(event.value)
         elif event.kind == "loaded":
             self._loaded = True
-            self.state = "playing"
+            self.state = "paused" if self._paused else "playing"
             self.observation("loaded")
             self.player.command(["set_property", "volume", self.volume])
-        elif event.kind == "pause" and self.state in {"playing", "paused"}:
-            self.state = "paused" if event.value else "playing"
-            self.save()
-            self.observation("pause" if event.value else "resume")
-        elif event.kind in {"finished", "dismissed"}:
+        elif event.kind == "pause":
+            self._paused = bool(event.value)
+            if self.state in {"playing", "paused"}:
+                self.state = "paused" if self._paused else "playing"
+                self.save()
+                self.observation("pause" if self._paused else "resume")
+        elif self.completes_current(event):
             self.next(completed=True)
+            return
+        elif event.kind == "dismissed":
+            # Paused (or still loading) is not done watching. stop invalidates
+            # this generation so a delayed EOF cannot consume the retained item.
+            self.stop()
             return
         elif event.kind == "error":
             if event.category in self.PUBLIC_RETRY_ERRORS and not self._loaded:
